@@ -48,8 +48,8 @@ export class UsersService {
     const existingUser = await this.prisma.user.findFirst({
       where: {
         OR: [
-          { email: data.email ?? undefined },
-          { phone: data.phone ?? undefined },
+          ...(data.email ? [{ email: data.email }] : []),
+          ...(data.phone ? [{ phone: data.phone }] : []),
           { documentNumber: data.documentNumber },
         ],
       },
@@ -185,6 +185,17 @@ export class UsersService {
     if (restricted.length && actor.role !== Role.ADMIN) {
       throw new ForbiddenException(
         `Solo un administrador puede modificar: ${restricted.join(', ')}`,
+      );
+    }
+
+    // PartialType deja pasar `null` sin validarlo. Ningún campo editable se
+    // puede vaciar: correo y teléfono son obligatorios desde el registro.
+    const cleared = Object.entries(data)
+      .filter(([, value]) => value === null)
+      .map(([field]) => field);
+    if (cleared.length) {
+      throw new BadRequestException(
+        `Estos campos no se pueden dejar vacíos: ${cleared.join(', ')}`,
       );
     }
 

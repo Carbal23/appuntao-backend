@@ -191,7 +191,7 @@ Las invitaciones anteriores al rediseño quedan con `createdById` en `null` y pu
 
 Detalles que salen de leer el código y que conviene confirmar al probar:
 
-1. **Usuarios sin correo ni teléfono.** El registro permite crear una cuenta solo con documento. Esa persona nunca ve invitaciones en `incoming` ni puede aceptar ninguna, porque no hay dato con el cual coincidir. ¿Es lo esperado, o la app debe pedirle un correo o teléfono?
+1. **Usuarios sin correo ni teléfono.** ~~El registro permitía crear una cuenta solo con documento~~. Ahora el registro exige ambos datos. Las cuentas creadas antes de ese cambio, si no tienen correo ni teléfono, siguen sin poder ver ni aceptar invitaciones (ver pendientes en [users.md](users.md#decisiones-y-pendientes)).
 2. **Reenviar renueva siempre a 7 días**, aunque la invitación se hubiera creado con otro `expiresInDays`. También revive una invitación vencida que siga en `PENDING` (por el vencimiento perezoso). Reenviar **no queda en la auditoría**.
 3. **El límite por negocio usa solo el header `x-business-id`.** Si el negocio llega por parámetro o query, todas esas peticiones comparten un mismo contador (`invitations:none`).
 4. **Un usuario puede quedar vinculado a dos deudores del mismo negocio** si el negocio lo invita desde dos registros de cliente distintos. No hay validación que lo impida.

@@ -1,17 +1,11 @@
-import {
-  ArrayNotEmpty,
-  IsArray,
-  IsEnum,
-  IsOptional,
-  IsUUID,
-} from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsEnum, IsUUID } from 'class-validator';
 import { DocumentType } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 import {
-  IsColombianPhone,
   IsDocumentNumber,
-  IsNormalizedEmail,
   IsPersonName,
+  IsRequiredColombianPhone,
+  IsRequiredEmail,
   IsStrongPassword,
 } from 'src/common/validation/contact.validators';
 
@@ -38,22 +32,18 @@ export class CreateUserDto {
 
   @ApiProperty({
     example: 'correo@email.com',
-    required: false,
-    description: 'Se guarda en minúsculas',
+    description: 'Obligatorio. Se guarda en minúsculas',
   })
-  @IsOptional()
-  @IsNormalizedEmail()
-  email?: string;
+  @IsRequiredEmail()
+  email!: string;
 
   @ApiProperty({
     example: '3001234567',
-    required: false,
     description:
-      'Celular o fijo de Colombia. Se acepta con espacios o con +57; se guarda con 10 dígitos.',
+      'Obligatorio. Celular o fijo de Colombia. Se acepta con espacios o con +57; se guarda con 10 dígitos.',
   })
-  @IsOptional()
-  @IsColombianPhone()
-  phone?: string;
+  @IsRequiredColombianPhone()
+  phone!: string;
 
   @ApiProperty({
     example: 'Clave2026',

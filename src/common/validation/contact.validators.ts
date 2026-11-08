@@ -4,6 +4,7 @@ import {
   IsEmail,
   IsNotEmpty,
   IsString,
+  isEmail,
   Matches,
   MaxLength,
   MinLength,
@@ -76,7 +77,9 @@ export function IsNormalizedEmail() {
   return applyDecorators(
     Transform(({ value }) => normalizeEmail(value)),
     IsEmail({}, { message: 'El correo electrónico no es válido' }),
-    MaxLength(254),
+    MaxLength(254, {
+      message: 'El correo electrónico no puede tener más de 254 caracteres',
+    }),
   );
 }
 
@@ -90,13 +93,59 @@ export function IsColombianPhone() {
   );
 }
 
+const isBlank = (value: unknown) =>
+  value === undefined || value === null || value === '';
+
+/**
+ * Correo obligatorio. A diferencia de `IsNormalizedEmail` + `IsNotEmpty`,
+ * devuelve un solo mensaje: que falta, que es muy largo o que no es válido.
+ */
+export function IsRequiredEmail() {
+  return applyDecorators(
+    Transform(({ value }) => normalizeEmail(value)),
+    ValidateBy({
+      name: 'isRequiredEmail',
+      validator: {
+        validate: (value: unknown) =>
+          typeof value === 'string' && value.length <= 254 && isEmail(value),
+        defaultMessage: (args?: ValidationArguments) => {
+          const value: unknown = args?.value;
+          if (isBlank(value)) return 'El correo electrónico es obligatorio';
+          if (typeof value === 'string' && value.length > 254) {
+            return 'El correo electrónico no puede tener más de 254 caracteres';
+          }
+          return 'El correo electrónico no es válido';
+        },
+      },
+    }),
+  );
+}
+
+/** Teléfono obligatorio, con un solo mensaje: que falta o que no es válido. */
+export function IsRequiredColombianPhone() {
+  return applyDecorators(
+    Transform(({ value }) => normalizePhone(value)),
+    ValidateBy({
+      name: 'isRequiredColombianPhone',
+      validator: {
+        validate: (value: unknown) =>
+          typeof value === 'string' && COLOMBIA_PHONE_PATTERN.test(value),
+        defaultMessage: (args?: ValidationArguments) =>
+          isBlank(args?.value)
+            ? 'El teléfono es obligatorio'
+            : 'El teléfono debe ser un celular colombiano de 10 dígitos (3XXXXXXXXX) o un fijo (60XXXXXXXX)',
+      },
+    }),
+  );
+}
+
 /** Nombres y apellidos: letras, espacios, apóstrofo, punto y guion. */
 export function IsPersonName() {
   return applyDecorators(
     Transform(trim),
     IsString(),
     IsNotEmpty({ message: 'El nombre no puede estar vacío' }),
-    MaxLength(60),
+    MaxLength(60, { message: 'El nombre no puede tener más de 60 caracteres' }),
     Matches(/^\p{L}[\p{L}\s'.-]*$/u, {
       message:
         'El nombre solo puede tener letras, espacios, apóstrofos, puntos y guiones',

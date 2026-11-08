@@ -38,12 +38,14 @@ Registro y gestión de las cuentas de usuario: crear la cuenta con su aceptació
 | `firstName`, `lastName` | Obligatorios, hasta 60 caracteres. Letras, espacios, apóstrofo, punto y guion | Sin espacios al inicio ni al final |
 | `documentType` | `CC`, `NIT` o `FOREIGNER` | — |
 | `documentNumber` | Obligatorio y único. CC: 6 a 10 dígitos. NIT: 9, o 10 con el dígito de verificación. Extranjería: 3 a 20 letras o números | CC y NIT solo dígitos (`1.032.876.361` → `1032876361`); extranjería en mayúsculas sin separadores |
-| `email` | Opcional y único | En minúsculas |
-| `phone` | Opcional y único. Celular (`3XXXXXXXXX`) o fijo (`60XXXXXXXX`) de Colombia | 10 dígitos, sin `+57` ni espacios |
+| `email` | **Obligatorio** y único | En minúsculas |
+| `phone` | **Obligatorio** y único. Celular (`3XXXXXXXXX`) o fijo (`60XXXXXXXX`) de Colombia | 10 dígitos, sin `+57` ni espacios |
 | `password` | Mínimo 8 caracteres y máximo 72 bytes, con al menos una letra y un número | Hash bcrypt |
 | `role` | El registro siempre crea `USER`. Solo un `ADMIN` puede cambiarlo | `USER` o `ADMIN` |
 
 La normalización hace que el mismo correo o teléfono no quede registrado dos veces con distinta escritura, y que el login y el `lookup` los encuentren se escriban como se escriban.
+
+Correo y teléfono son obligatorios porque son los datos con los que la persona inicia sesión, la encuentran para agregarla a un negocio y le llegan las invitaciones. En la base siguen siendo columnas opcionales, porque la anonimización de una cuenta los borra. Si falta uno, la API responde un solo mensaje por campo (`"El correo electrónico es obligatorio"`, `"El teléfono es obligatorio"`).
 
 La regla de contraseña aplica al registro y al cambio de contraseña, **no al login**, para que las cuentas creadas con la regla anterior sigan entrando.
 
@@ -83,7 +85,7 @@ Las respuestas nunca incluyen la contraseña ni los campos de estado interno: se
 ### Edición
 
 - El propio usuario solo puede cambiar `firstName` y `lastName`. Si envía correo, teléfono, documento o rol, responde 403.
-- Un `ADMIN` puede cambiar todos esos campos.
+- Un `ADMIN` puede cambiar todos esos campos, pero ninguno se puede vaciar: enviar `null` en cualquier campo responde 400.
 - La contraseña no se cambia por aquí (va por `/me/password`), y las aceptaciones legales tampoco (van por `/legal/accept`).
 
 ### Cambio de contraseña
@@ -136,6 +138,8 @@ Pensado para agregar a una persona a un negocio sin exponer la lista de usuarios
 
 - **Decisión:** el usuario no puede cambiar su correo, teléfono ni documento. **Por qué (por confirmar):** son los datos con los que se le identifica, se le busca y se le invita; cambiarlos sin verificarlos permitiría quedarse con invitaciones dirigidas a otra persona.
 - **Decisión:** el registro no acepta `role` y siempre crea `USER`. **Por qué:** el DTO anterior aceptaba `role` aunque el servicio lo ignoraba; ahora el contrato de la API refleja lo que de verdad pasa.
-- **Pendiente (bug):** en `UsersService.create`, la búsqueda del usuario existente arma `OR: [{ email: data.email ?? undefined }, ...]`. Si el registro no trae correo (o teléfono), Prisma interpreta `{ email: undefined }` como `{}`, que coincide con **cualquier** usuario. Si ese usuario está desactivado, el registro falla con un falso "ya existe una cuenta... pero está desactivada". Si no, el duplicado real puede escaparse de la validación y terminar en el error genérico de campo único. Se corrige agregando al `OR` solo los datos que vienen.
+- **Decisión:** correo y teléfono obligatorios en el registro. **Por qué:** sin ellos la cuenta no podía recibir ni aceptar invitaciones, y la validación de duplicados fallaba (ver el siguiente punto).
+- **Corregido:** la búsqueda del usuario existente en el registro armaba `OR: [{ email: data.email ?? undefined }, ...]`. Prisma interpreta `{ email: undefined }` como `{}`, que coincide con **cualquier** usuario, así que un registro sin correo podía fallar con un falso "ya existe una cuenta... pero está desactivada". Ahora el `OR` solo incluye los datos que llegan.
+- **Pendiente:** las cuentas creadas antes de esta regla pueden no tener correo o teléfono. Revisar cuántas hay en development y decidir si se les pide completarlos (por ejemplo, desde la app al iniciar sesión).
 - **Pendiente:** recuperación de contraseña.
 - **Pendiente:** verificación de correo y teléfono.
