@@ -8,7 +8,7 @@ import { Injectable } from '@nestjs/common';
  * que se construyen los correos que se ven bien en Gmail, Outlook y Apple Mail—
  * para que una invitación transmita confianza y parezca de un remitente serio.
  *
- * El acento de la marca es el verde de Fiao. El logo se muestra como un
+ * El acento de la marca es el verde de Appuntao. El logo se muestra como un
  * wordmark de texto por defecto (no depende de ninguna imagen alojada, que es
  * la causa más común de correos "rotos"); si se define `LOGO_URL` con una URL
  * pública del logo, se usa esa imagen en su lugar.
@@ -20,7 +20,7 @@ import { Injectable } from '@nestjs/common';
 @Injectable()
 export class EmailProvider {
   private resend = new Resend(process.env.RESEND_API_KEY);
-  private from = process.env.EMAIL_FROM || 'FIAO <onboarding@resend.dev>';
+  private from = process.env.EMAIL_FROM || 'APPUNTAO <onboarding@resend.dev>';
   private logoUrl = process.env.LOGO_URL;
 
   private readonly brand = '#00B26B';
@@ -38,10 +38,10 @@ export class EmailProvider {
   async sendDebtorInvitation(to: string, code: string, businessName: string) {
     const html = this.renderInvitation({
       heading: `Consulta tus deudas en ${businessName}`,
-      intro: `El negocio <strong>${businessName}</strong> te invita a ver tus vales y saldos en Fiao. Usa este código dentro de la app.`,
+      intro: `El negocio <strong>${businessName}</strong> te invita a ver tus vales y saldos en Appuntao. Usa este código dentro de la app.`,
       code,
       steps: [
-        'Instala Fiao e ingresa con tu cuenta.',
+        'Instala Appuntao e ingresa con tu cuenta.',
         'Ve a <strong>Perfil &rarr; Tengo un c&oacute;digo</strong>.',
         'Escribe el c&oacute;digo de arriba.',
       ],
@@ -49,7 +49,7 @@ export class EmailProvider {
 
     const text = this.renderInvitationText({
       heading: `Consulta tus deudas en ${businessName}`,
-      intro: `El negocio ${businessName} te invita a ver tus vales y saldos en Fiao.`,
+      intro: `El negocio ${businessName} te invita a ver tus vales y saldos en Appuntao.`,
       code,
     });
 
@@ -72,11 +72,11 @@ export class EmailProvider {
 
     const html = this.renderInvitation({
       heading: `Te invitaron a ${businessName}`,
-      intro: `Te dieron acceso al equipo de <strong>${businessName}</strong> en Fiao como <strong>${roleLabel}</strong>. Usa este c&oacute;digo dentro de la app para unirte.`,
+      intro: `Te dieron acceso al equipo de <strong>${businessName}</strong> en Appuntao como <strong>${roleLabel}</strong>. Usa este c&oacute;digo dentro de la app para unirte.`,
       code,
       badge: roleLabel,
       steps: [
-        'Instala Fiao e ingresa con tu cuenta.',
+        'Instala Appuntao e ingresa con tu cuenta.',
         'Ve a <strong>Perfil &rarr; Tengo un c&oacute;digo</strong>.',
         'Escribe el c&oacute;digo de arriba y listo.',
       ],
@@ -84,14 +84,14 @@ export class EmailProvider {
 
     const text = this.renderInvitationText({
       heading: `Te invitaron a trabajar en ${businessName}`,
-      intro: `Te dieron acceso al equipo de ${businessName} en Fiao como ${roleLabel}.`,
+      intro: `Te dieron acceso al equipo de ${businessName} en Appuntao como ${roleLabel}.`,
       code,
     });
 
     return this.resend.emails.send({
       from: this.from,
       to,
-      subject: `Invitación para unirte a ${businessName} en Fiao`,
+      subject: `Invitación para unirte a ${businessName} en Appuntao`,
       html,
       text,
     });
@@ -102,9 +102,9 @@ export class EmailProvider {
   /** Cabecera de marca: logo alojado si hay `LOGO_URL`, si no, el wordmark. */
   private brandMark(): string {
     if (this.logoUrl) {
-      return `<img src="${this.logoUrl}" alt="Fiao" height="32" style="height:32px;display:block;border:0;outline:none;text-decoration:none;" />`;
+      return `<img src="${this.logoUrl}" alt="Appuntao" height="32" style="height:32px;display:block;border:0;outline:none;text-decoration:none;" />`;
     }
-    return `<span style="font-family:Arial,Helvetica,sans-serif;font-size:26px;line-height:1;font-weight:800;letter-spacing:-0.5px;color:#ffffff;">Fiao</span>`;
+    return `<span style="font-family:Arial,Helvetica,sans-serif;font-size:26px;line-height:1;font-weight:800;letter-spacing:-0.5px;color:#ffffff;">Appuntao</span>`;
   }
 
   private renderInvitation(opts: {
@@ -178,7 +178,7 @@ export class EmailProvider {
             </tr>
             <tr>
               <td style="padding:20px 32px;border-top:1px solid #EEF1F4;text-align:center;">
-                <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#9AA4AE;">Fiao · Lleva el control de tus fiados</p>
+                <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#9AA4AE;">Appuntao · Lleva el control de tus fiados</p>
               </td>
             </tr>
           </table>
@@ -203,13 +203,13 @@ export class EmailProvider {
       `Tu código: ${opts.code.toUpperCase()}`,
       '',
       'Cómo unirte:',
-      '1. Instala Fiao e ingresa con tu cuenta.',
+      '1. Instala Appuntao e ingresa con tu cuenta.',
       '2. Ve a Perfil → Tengo un código.',
       '3. Escribe el código de arriba.',
       '',
       'El código vence en 7 días. Si no esperabas esta invitación, ignora este correo.',
       '',
-      'Fiao · Lleva el control de tus fiados',
+      'Appuntao · Lleva el control de tus fiados',
     ].join('\n');
   }
 }

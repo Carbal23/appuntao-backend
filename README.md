@@ -1,8 +1,8 @@
-# 💸 FIAO Backend (MVP)
+# 💸 APPUNTAO Backend (MVP)
 
 ## 🧩 Descripción general
 
-**FIAO Backend** es el servidor principal del **MVP de FIAO**, una aplicación diseñada para gestionar **deudas, pagos y relaciones entre negocios y clientes (deudores)**.  
+**APPUNTAO Backend** es el servidor principal del **MVP de APPUNTAO**, una aplicación diseñada para gestionar **deudas, pagos y relaciones entre negocios y clientes (deudores)**.  
 El sistema permite que cada **usuario o negocio** registre deudas, lleve control de pagos, gestione invitaciones, registre empleados y mantenga trazabilidad de las operaciones.
 
 Este backend está desarrollado con **NestJS** y **Prisma ORM**, y se conecta a una base de datos **PostgreSQL** (tanto local como en Supabase).  
@@ -84,7 +84,7 @@ PORT=3000
 # PostgreSQL local
 PG_USER=postgres
 PG_PASSWORD=postgres
-PG_DB=fiao_db
+PG_DB=appuntao_db
 PG_HOST=localhost
 PG_PORT=5432
 
@@ -236,7 +236,7 @@ Por eso `migrate dev` nunca se ejecuta contra una base compartida: un "sí" por 
 
 **1. Preparar tu base local (primera vez)**
 
-1. Crea en tu PostgreSQL una base vacía (por ejemplo `fiao_db`) y configúrala en `.env.local`.
+1. Crea en tu PostgreSQL una base vacía (por ejemplo `appuntao_db`) y configúrala en `.env.local`.
 2. Ejecuta:
    ```bash
    npm install
@@ -306,7 +306,7 @@ Así, si hay que revertir el código, la base sigue siendo compatible.
 
 ### Probar la versión Java en local
 
-La versión Java usa Flyway, que crea su propia tabla (`flyway_schema_history`). Usa **una base local separada** para Java (por ejemplo `fiao_db_java`). Si Java corre sobre la misma base que Nest, `migrate:local` detecta esa tabla como diferencia y ofrece resetear.
+La versión Java usa Flyway, que crea su propia tabla (`flyway_schema_history`). Usa **una base local separada** para Java (por ejemplo `appuntao_db_java`). Si Java corre sobre la misma base que Nest, `migrate:local` detecta esa tabla como diferencia y ofrece resetear.
 
 ---
 
@@ -322,7 +322,7 @@ La versión Java usa Flyway, que crea su propia tabla (`flyway_schema_history`).
 
 ## 🧑‍💻 Autor
 
-**Equipo FIAO**  
+**Equipo APPUNTAO**  
 Desarrollado por [Mauricio Carbal](#) 🧠  
 Con arquitectura y flujo diseñados para escalar hacia futuras integraciones.
 
@@ -352,8 +352,8 @@ Con arquitectura y flujo diseñados para escalar hacia futuras integraciones.
 ### 🧡 Contribuye
 Si deseas colaborar:
 ```bash
-git clone https://github.com/tu-repo/fiao-backend.git
-cd fiao-backend
+git clone https://github.com/tu-repo/appuntao-backend.git
+cd appuntao-backend
 npm install
 npm run migrate:local
 npm run start:local
@@ -361,4 +361,4 @@ npm run start:local
 
 ---
 
-✨ **FIAO Backend** — un sistema simple, modular y listo para escalar 🚀
+✨ **APPUNTAO Backend** — un sistema simple, modular y listo para escalar 🚀

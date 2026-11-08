@@ -16,9 +16,9 @@ async function bootstrap() {
   );
 
   const config = new DocumentBuilder()
-    .setTitle('FIAO API')
+    .setTitle('APPUNTAO API')
     .setDescription(
-      'FIAO API para gestión de negocios, deudas, pagos y usuarios',
+      'APPUNTAO API para gestión de negocios, deudas, pagos y usuarios',
     )
     .setVersion('1.0.0')
     .addBearerAuth(SWAGGER_AUTH, 'access-token')
