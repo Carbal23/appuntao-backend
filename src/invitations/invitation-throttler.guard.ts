@@ -3,7 +3,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 
 /**
  * Limita cuántas invitaciones crea cada negocio, sin importar desde qué
- * dispositivo: evita que FIAO se use para enviar correos masivos, lo que
+ * dispositivo: evita que APPUNTAO se use para enviar correos masivos, lo que
  * dañaría la reputación del dominio de envío.
  */
 @Injectable()

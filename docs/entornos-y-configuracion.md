@@ -26,6 +26,10 @@ Los archivos `.env*` **no van en Git**. En el servidor de despliegue las variabl
 | `RESEND_API_KEY` | Para enviar correos | — | API key de Resend |
 | `EMAIL_FROM` | No | `APPUNTAO <onboarding@resend.dev>` | Remitente. El dominio debe estar verificado en Resend |
 | `LOGO_URL` | No | — | URL pública del logo para los correos. Sin ella se usa un logo de texto |
+| `TRUST_PROXY` | En Render, sí | — | Número de proxies delante de la app (en Render, `1`). Sin ella, los límites de intentos y los registros de seguridad ven la IP del proxy en lugar de la del usuario. En local no hace falta |
+| `ACCOUNT_DELETION_GRACE_DAYS` | No | `15` | Días entre la solicitud de eliminación de una cuenta y su anonimización |
+| `INACTIVE_ACCOUNT_RETENTION_MONTHS` | No | `48` | Meses tras los cuales se anonimiza una cuenta desactivada |
+| `CLOSED_BUSINESS_RETENTION_MONTHS` | No | `6` | Meses tras los cuales se eliminan los datos de un negocio inactivo |
 
 ## Ejemplos
 

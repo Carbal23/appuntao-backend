@@ -6,17 +6,20 @@ Resumen de cada modelo de `prisma/schema.prisma`. El detalle de cómo los usa ca
 
 | Modelo | Qué representa |
 | --- | --- |
-| `User` | Persona registrada. Puede ser dueña de negocios, miembro de un equipo o deudor vinculado. Tiene un rol de plataforma (`Role`) e `inactivatedAt` para la inactivación |
+| `User` | Persona registrada. Puede ser dueña de negocios, miembro de un equipo o deudor vinculado. Tiene un rol de plataforma (`USER` o `ADMIN`) y los campos del ciclo de vida: `inactivatedAt`, `inactivatedBy`, `deletionRequestedAt`, `deletionScheduledAt`, `anonymizedAt` |
 | `Business` | Negocio. Pertenece a un `owner` y tiene equipo, deudores, deudas, pagos e invitaciones. Moneda por defecto `COP` |
 | `BusinessUser` | Membresía de un usuario en un negocio, con su rol (`OWNER`, `ADMIN`, `CASHIER`, `VIEWER`). Única por par negocio-usuario |
 | `Debtor` | Cliente de un negocio. Puede existir sin cuenta y vincularse después a un `User` |
 | `Debt` | Deuda de un deudor con un negocio: `amount` original, `balance` pendiente, estado (`OPEN`, `PARTIAL`, `PAID`, `CANCELLED`) y fecha de vencimiento opcional |
 | `Payment` | Movimiento sobre una deuda: pago (`PAYMENT`), ajuste (`ADJUSTMENT`) o reverso (`REVERSAL`), con método (`CASH`, `TRANSFER`, `OTHER`) |
 | `PaymentGroup` | Agrupa los pagos de un mismo abono repartido entre varias deudas de un deudor. `reversedAt` marca si se reversó |
-| `Invitation` | Invitación a un deudor (`DEBTOR`) o a un miembro del equipo (`BUSINESS_USER`, con su rol), con código único, vencimiento y estado |
+| `Invitation` | Invitación a un cliente (`DEBTOR`) o a un miembro del equipo (`BUSINESS_USER`, con su rol), dirigida a un correo o teléfono, con código único, vencimiento, estado (`PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`, `EXPIRED`), quién la creó y quién la aceptó |
 | `RefreshToken` | Refresh tokens guardados como hash, agrupados por familia (rotación) y asociados a un dispositivo |
-| `AuthLog` | Eventos de seguridad: logins exitosos y fallidos, bloqueos, logouts, cambios de contraseña |
+| `AuthLog` | Eventos de seguridad: logins, bloqueos, logouts, cambios de contraseña, reutilización de refresh tokens y eventos del ciclo de vida de la cuenta |
 | `AuditLog` | Auditoría de acciones: quién hizo qué, sobre qué entidad y con qué datos |
+| `LegalDocument` | Versiones de los términos y la política de datos, con su texto y huella SHA-256. No se modifican |
+| `UserConsent` | Qué versión aceptó cada usuario, cuándo y desde dónde |
+| `BusinessOwnershipTransfer` | Transferencia de la propiedad de un negocio a un miembro, pendiente de su aceptación |
 
 Los montos usan `Decimal(12, 2)`.
 

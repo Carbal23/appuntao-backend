@@ -9,7 +9,8 @@ prisma/
 ├── schema.prisma          modelos de la base de datos
 └── migrations/            historial de migraciones (va en Git)
 src/
-├── main.ts                arranque: prefijo /api, ValidationPipe, Swagger, CORS
+├── main.ts                arranque: prefijo /api, trust proxy, ValidationPipe, Swagger, CORS
+├── maintenance.ts         ejecuta a mano la tarea diaria de account-lifecycle
 ├── app.module.ts          módulo raíz: config global y registro de módulos
 ├── config/                configuración tipada con registerAs (app, database, jwt)
 ├── prisma/                PrismaModule y PrismaService
@@ -19,8 +20,11 @@ src/
 │   ├── pagination/        PaginationDto, construcción de where/orderBy, paginate()
 │   ├── dto/               DTOs compartidos (ApiResponseDto)
 │   ├── swagger/           decorators de Swagger (@ApiAuth, @BusinessProtected)
+│   ├── validation/        normalización y validación de correo, teléfono, documento,
+│   │                      nombres y contraseña; búsqueda de usuario por identificador
 │   └── utils/             extractBusinessId
 └── <modulo>/              un módulo por dominio
+scripts/                   scripts de operación (publicar documentos legales)
 ```
 
 ## Anatomía de un módulo
@@ -38,6 +42,7 @@ Cada dominio (`debts`, `payments`, `invitations`, ...) sigue la misma forma:
 
 ## Arranque (`main.ts`)
 
+- Si `TRUST_PROXY` es mayor que 0, Express toma la IP real del cliente de `X-Forwarded-For`. Necesario detrás de Render, para que los límites de intentos y los registros de seguridad no vean a todos con la IP del proxy.
 - Todas las rutas tienen el prefijo **`/api`**.
 - `ValidationPipe` global con `whitelist`, `forbidNonWhitelisted` y `transform`: los campos que no están en el DTO se rechazan con 400, y los query params se convierten al tipo declarado.
 - **Swagger** se publica en `/docs` solo cuando `NODE_ENV !== 'production'`.
@@ -67,14 +72,17 @@ Los guards se aplican **por controller o por ruta** con `@UseGuards`. No hay gua
 | Pieza | Qué hace |
 | --- | --- |
 | `JwtAuthGuard` | Valida el access token (`Authorization: Bearer ...`) con `JwtStrategy` y deja el usuario en `request.user` |
-| `RolesGuard` + `@Roles(...)` | Restringe por **rol de plataforma** (`User.role`: `USER`, `ADMIN`, `MODERATOR`, `SUSPENDED`) |
+| `RolesGuard` + `@Roles(...)` | Restringe por **rol de plataforma** (`User.role`: `USER` o `ADMIN`) |
 | `BusinessContextGuard` | Exige el negocio activo, verifica que exista, que no esté inactivado y que el usuario sea miembro. Deja `request.business` |
 | `BusinessRoleGuard` + `@BusinessRoles(...)` | Restringe por **rol dentro del negocio** (`BusinessUser.role`). Sin `@BusinessRoles`, deja pasar |
 | `LoginThrottlerGuard` | Limita intentos de login por IP + identificador y registra el bloqueo en `auth-log` |
+| `ThrottlerGuard` + `@Throttle(...)` | Límite de peticiones por IP en rutas sensibles (registro, lookup, códigos de invitación). Los contadores viven en memoria de cada instancia |
+
+`JwtStrategy` busca al usuario en la base en cada petición: si está inactivado responde 401, aunque el token no haya vencido. Detalle en [modulos/auth.md](modulos/auth.md).
 
 ### Dos tipos de rol
 
-- **Rol de plataforma** (`User.role`): qué puede hacer la persona en todo el sistema.
+- **Rol de plataforma** (`User.role`): qué puede hacer la persona en todo el sistema. `ADMIN` es soporte o backoffice; el registro siempre crea `USER`.
 - **Rol en el negocio** (`BusinessUser.role`): qué puede hacer dentro de un negocio concreto.
 
 | Rol en el negocio | Uso previsto |
@@ -127,3 +135,9 @@ Las utilidades de `common/pagination/utils` arman el `where`, el `orderBy` y la 
 | Proveedor | Archivo | Uso |
 | --- | --- | --- |
 | Resend | `src/providers/email.provider.ts` | Correos de invitación (HTML con tablas y estilos en línea, más versión en texto plano) |
+
+## Tareas programadas
+
+| Tarea | Cuándo | Documento |
+| --- | --- | --- |
+| Mantenimiento de cuentas y negocios | Todos los días, 3:00 a. m. hora Colombia | [modulos/account-lifecycle.md](modulos/account-lifecycle.md#tarea-diaria) |

@@ -121,7 +121,7 @@ export class BusinessExportService {
     );
 
     const workbook = new Workbook();
-    workbook.creator = 'FIAO';
+    workbook.creator = 'APPUNTAO';
     workbook.created = new Date();
 
     const summary = workbook.addWorksheet('Resumen');
@@ -278,7 +278,7 @@ export class BusinessExportService {
 
     const today = toBogota(new Date())!.toISOString().slice(0, 10);
     return {
-      filename: `fiao-${slugify(business.name)}-${today}.xlsx`,
+      filename: `appuntao-${slugify(business.name)}-${today}.xlsx`,
       content,
     };
   }

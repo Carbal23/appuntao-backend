@@ -560,10 +560,10 @@ export class InvitationsService {
       : 'regístrate con este correo';
     const purpose =
       invitation.type === InvitationType.DEBTOR
-        ? 'a ver tus cuentas en FIAO'
-        : `a unirte a su equipo en FIAO como ${ROLE_LABELS[invitation.role!]}`;
+        ? 'a ver tus cuentas en APPUNTAO'
+        : `a unirte a su equipo en APPUNTAO como ${ROLE_LABELS[invitation.role!]}`;
 
-    const shareText = `Hola, ${businessName} te invita ${purpose}. Descarga FIAO, inicia sesión o ${registerWith}, y acepta la invitación que te aparece en la app. Si te pide un código, es: ${invitation.code}`;
+    const shareText = `Hola, ${businessName} te invita ${purpose}. Descarga APPUNTAO, inicia sesión o ${registerWith}, y acepta la invitación que te aparece en la app. Si te pide un código, es: ${invitation.code}`;
 
     return {
       shareText,

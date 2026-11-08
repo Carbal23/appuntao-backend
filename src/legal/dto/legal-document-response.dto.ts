@@ -19,7 +19,7 @@ export class LegalDocumentResponseDto extends LegalDocumentSummaryDto {
   @ApiProperty({ description: 'SHA-256 del texto' })
   contentHash!: string;
 
-  @ApiPropertyOptional({ example: 'https://fiao.co/privacidad' })
+  @ApiPropertyOptional({ example: 'https://appuntao.co/privacidad' })
   url!: string | null;
 
   @ApiProperty({ example: '2026-10-16T00:00:00.000Z' })
