@@ -333,7 +333,12 @@ export class AuthService {
 
   private async pendingLegalDocuments(userId: string) {
     const pending = await this.legalService.getPendingDocuments(userId);
-    return pending.map(({ id, type, version }) => ({ id, type, version }));
+    return pending.map(({ id, type, version, title }) => ({
+      id,
+      type,
+      version,
+      title,
+    }));
   }
 
   async getUserSafeById(id: string): Promise<UserSafe | null> {

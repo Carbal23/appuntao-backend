@@ -7,29 +7,54 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateBusinessDto } from './dto/create-business.dto';
 import { UpdateBusinessDto } from './dto/update-business.dto';
-import { BusinessUserRole } from '@prisma/client';
+import { BusinessUserRole, LegalAudience } from '@prisma/client';
 import { AuditService } from 'src/audit/audit.service';
 import { AuditAction } from 'src/audit/audit.types';
 import { PaginationDto } from 'src/common/pagination/dto/pagination.dto';
 import { buildWhere } from 'src/common/pagination/utils/build-where.util';
 import { paginate } from 'src/common/pagination/utils/paginate.util';
 import { buildOrder } from 'src/common/pagination/utils/build-order.util';
+import { LegalService } from 'src/legal/legal.service';
+import type { RequestContext } from 'src/auth-log/auth-log.types';
 
 @Injectable()
 export class BusinessService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly legalService: LegalService,
   ) {}
 
-  async create(createBusinessDto: CreateBusinessDto, userId: string) {
+  async create(
+    createBusinessDto: CreateBusinessDto,
+    userId: string,
+    context?: RequestContext,
+  ) {
+    const { acceptedLegalDocumentIds = [], ...businessData } =
+      createBusinessDto;
+
+    // Quien crea un negocio pasa a ser Responsable de los datos de sus
+    // clientes: antes tiene que aceptar los documentos para negocios.
+    await this.legalService.assertAcceptsCurrent(
+      acceptedLegalDocumentIds,
+      LegalAudience.BUSINESS_OWNERS,
+      userId,
+    );
+
     return this.prisma.$transaction(async (tx) => {
       const business = await tx.business.create({
         data: {
-          ...createBusinessDto,
+          ...businessData,
           ownerId: userId,
         },
       });
+
+      await this.legalService.recordConsents(
+        tx,
+        userId,
+        acceptedLegalDocumentIds,
+        context,
+      );
 
       await tx.businessUser.create({
         data: {

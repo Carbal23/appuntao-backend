@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { ApiAuth } from 'src/common/swagger/auth.decorator';
@@ -8,6 +8,7 @@ import type { RequestContext } from 'src/auth-log/auth-log.types';
 import { LegalService } from './legal.service';
 import { AcceptLegalDocumentsDto } from './dto/accept-legal-documents.dto';
 import { LegalDocumentResponseDto } from './dto/legal-document-response.dto';
+import { CurrentLegalDocumentsQueryDto } from './dto/current-legal-documents-query.dto';
 
 @ApiTags('Legal')
 @Controller('legal')
@@ -18,11 +19,11 @@ export class LegalController {
   @ApiOperation({
     summary: 'Documentos legales vigentes',
     description:
-      'Público. Devuelve la versión vigente de los términos y condiciones y de la política de tratamiento de datos, con su texto. El registro debe enviar estos ids en acceptedLegalDocumentIds.',
+      'Público. Devuelve la versión vigente de cada tipo de documento del catálogo, con su texto, en el orden en que se deben mostrar. El registro envía los ids de audience=ALL_USERS en acceptedLegalDocumentIds; la creación de un negocio, los de audience=BUSINESS_OWNERS.',
   })
   @ApiResponse({ status: 200, type: [LegalDocumentResponseDto] })
-  getCurrent() {
-    return this.legalService.getCurrentDocuments();
+  getCurrent(@Query() query: CurrentLegalDocumentsQueryDto) {
+    return this.legalService.getCurrentDocuments(query.audience);
   }
 
   @UseGuards(JwtAuthGuard)

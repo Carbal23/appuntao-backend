@@ -220,15 +220,28 @@ enum AuthLogEvent {
   REFRESH_TOKEN_REUSED
 }
 
+model LegalDocumentKind {
+  code      String          @id
+  title     String
+  audience  LegalAudience   @default(ALL_USERS)
+  required  Boolean         @default(true)
+  sortOrder Int             @default(0)
+  active    Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  documents LegalDocument[]
+}
+
 model LegalDocument {
   id          String            @id @default(uuid())
-  type        LegalDocumentType
+  type        String
   version     String
-  content     String 
-  contentHash String // SHA-256 del texto: prueba de qué se aceptó exactamente
-  url         String? // página pública donde también está publicado
+  content     String
+  contentHash String
+  url         String?
   publishedAt DateTime
   createdAt   DateTime          @default(now())
+  kind        LegalDocumentKind @relation(fields: [type], references: [code])
   consents    UserConsent[]
 
   @@unique([type, version])
@@ -249,9 +262,9 @@ model UserConsent {
   @@index([userId])
 }
 
-enum LegalDocumentType {
-  TERMS_AND_CONDITIONS
-  PRIVACY_POLICY
+enum LegalAudience {
+  ALL_USERS
+  BUSINESS_OWNERS
 }
 
 enum DocumentType {
@@ -261,17 +274,17 @@ enum DocumentType {
 }
 
 enum Role {
-  USER // por defecto, cualquier usuario registrado
-  ADMIN // administrador de la plataforma (ej. soporte, superadmin)
-  MODERATOR // opcional, revisión de contenidos o incidencias
-  SUSPENDED // cuenta bloqueada
+  USER
+  ADMIN
+  MODERATOR
+  SUSPENDED
 }
 
 enum BusinessUserRole {
-  OWNER // dueño del negocio (aunque también está en Business.ownerId)
-  ADMIN // puede gestionar usuarios, deudas, pagos
-  CASHIER // puede registrar pagos, ver deudas
-  VIEWER // solo lectura
+  OWNER
+  ADMIN
+  CASHIER
+  VIEWER
 }
 
 enum DebtStatus {

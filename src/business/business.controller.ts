@@ -19,6 +19,8 @@ import { ApiAuth } from 'src/common/swagger/auth.decorator';
 import { BusinessResponseDto } from './dto/business-response.dto';
 import { PaginatedBusinessResponseDto } from './dto/paginated-business-response.dto';
 import { BusinessDetailResponseDto } from './dto/business-detail-response.dto';
+import { ReqContext } from 'src/common/decorators/request-context.decorator';
+import type { RequestContext } from 'src/auth-log/auth-log.types';
 
 @ApiTags('Business')
 @Controller('business')
@@ -34,9 +36,21 @@ export class BusinessController {
     description: 'Negocio creado',
     type: BusinessResponseDto,
   })
-  @ApiResponse({ status: 400, description: 'Error de validación' })
-  create(@Body() dto: CreateBusinessDto, @GetUser('id') userId: string) {
-    return this.businessService.create(dto, userId);
+  @ApiResponse({
+    status: 400,
+    description:
+      'Error de validación, o no se aceptó la versión vigente de los documentos para negocios',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'No hay documentos para negocios publicados',
+  })
+  create(
+    @Body() dto: CreateBusinessDto,
+    @GetUser('id') userId: string,
+    @ReqContext() context: RequestContext,
+  ) {
+    return this.businessService.create(dto, userId, context);
   }
 
   @Get()
