@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { Injectable } from '@nestjs/common';
+import { ROLE_LABELS } from 'src/invitations/invitation.constants';
 
 /**
  * Envío de correos (Resend).
@@ -28,29 +29,29 @@ export class EmailProvider {
   private readonly muted = '#5B6672';
   private readonly pageBg = '#F4F6F8';
 
-  private readonly roleLabelEs: Record<string, string> = {
-    OWNER: 'Dueño',
-    ADMIN: 'Administrador',
-    CASHIER: 'Cajero',
-    VIEWER: 'Solo lectura',
-  };
-
-  async sendDebtorInvitation(to: string, code: string, businessName: string) {
+  async sendDebtorInvitation(
+    to: string,
+    code: string,
+    businessName: string,
+    expiresInDays: number,
+  ) {
     const html = this.renderInvitation({
       heading: `Consulta tus deudas en ${businessName}`,
       intro: `El negocio <strong>${businessName}</strong> te invita a ver tus vales y saldos en Fiao. Usa este código dentro de la app.`,
       code,
       steps: [
-        'Instala Fiao e ingresa con tu cuenta.',
-        'Ve a <strong>Perfil &rarr; Tengo un c&oacute;digo</strong>.',
-        'Escribe el c&oacute;digo de arriba.',
+        'Instala Fiao e inicia sesi&oacute;n, o crea tu cuenta <strong>con este mismo correo</strong>.',
+        'Acepta la invitaci&oacute;n que te aparece en la app.',
+        'Si te pide un c&oacute;digo, escribe el de arriba.',
       ],
+      expiresInDays,
     });
 
     const text = this.renderInvitationText({
       heading: `Consulta tus deudas en ${businessName}`,
       intro: `El negocio ${businessName} te invita a ver tus vales y saldos en Fiao.`,
       code,
+      expiresInDays,
     });
 
     return this.resend.emails.send({
@@ -67,8 +68,9 @@ export class EmailProvider {
     code: string,
     businessName: string,
     role: string,
+    expiresInDays: number,
   ) {
-    const roleLabel = this.roleLabelEs[role] ?? role;
+    const roleLabel = ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role;
 
     const html = this.renderInvitation({
       heading: `Te invitaron a ${businessName}`,
@@ -76,16 +78,18 @@ export class EmailProvider {
       code,
       badge: roleLabel,
       steps: [
-        'Instala Fiao e ingresa con tu cuenta.',
-        'Ve a <strong>Perfil &rarr; Tengo un c&oacute;digo</strong>.',
-        'Escribe el c&oacute;digo de arriba y listo.',
+        'Instala Fiao e inicia sesi&oacute;n, o crea tu cuenta <strong>con este mismo correo</strong>.',
+        'Acepta la invitaci&oacute;n que te aparece en la app.',
+        'Si te pide un c&oacute;digo, escribe el de arriba.',
       ],
+      expiresInDays,
     });
 
     const text = this.renderInvitationText({
       heading: `Te invitaron a trabajar en ${businessName}`,
       intro: `Te dieron acceso al equipo de ${businessName} en Fiao como ${roleLabel}.`,
       code,
+      expiresInDays,
     });
 
     return this.resend.emails.send({
@@ -113,6 +117,7 @@ export class EmailProvider {
     code: string;
     steps: string[];
     badge?: string;
+    expiresInDays: number;
   }): string {
     const badge = opts.badge
       ? `<span style="display:inline-block;background-color:#E6F7EF;color:${this.brand};font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.3px;padding:6px 12px;border-radius:999px;">${opts.badge}</span>`
@@ -173,7 +178,7 @@ export class EmailProvider {
             </tr>
             <tr>
               <td style="padding:12px 32px 28px 32px;">
-                <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:${this.muted};">El código vence en 7 días. Si no esperabas esta invitación, puedes ignorar este correo.</p>
+                <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:${this.muted};">La invitación vence en ${opts.expiresInDays} días. Si no esperabas esta invitación, puedes ignorar este correo.</p>
               </td>
             </tr>
             <tr>
@@ -194,6 +199,7 @@ export class EmailProvider {
     heading: string;
     intro: string;
     code: string;
+    expiresInDays: number;
   }): string {
     return [
       opts.heading,
@@ -203,11 +209,11 @@ export class EmailProvider {
       `Tu código: ${opts.code.toUpperCase()}`,
       '',
       'Cómo unirte:',
-      '1. Instala Fiao e ingresa con tu cuenta.',
-      '2. Ve a Perfil → Tengo un código.',
-      '3. Escribe el código de arriba.',
+      '1. Instala Fiao e inicia sesión, o crea tu cuenta con este mismo correo.',
+      '2. Acepta la invitación que te aparece en la app.',
+      '3. Si te pide un código, escribe el de arriba.',
       '',
-      'El código vence en 7 días. Si no esperabas esta invitación, ignora este correo.',
+      `La invitación vence en ${opts.expiresInDays} días. Si no esperabas esta invitación, ignora este correo.`,
       '',
       'Fiao · Lleva el control de tus fiados',
     ].join('\n');

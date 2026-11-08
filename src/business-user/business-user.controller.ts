@@ -5,12 +5,10 @@ import {
   Get,
   Param,
   Patch,
-  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { BusinessUserService } from './business-user.service';
-import { CreateBusinessUserDto } from './dto/create-business-user.dto';
 import { UpdateBusinessUserDto } from './dto/update-business-user.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { CurrentBusiness } from 'src/common/decorators/current-business.decorator';
@@ -39,32 +37,8 @@ import { BusinessProtected } from 'src/common/swagger/business.decorator';
 export class BusinessUserController {
   constructor(private readonly businessUserService: BusinessUserService) {}
 
-  @Post()
-  @BusinessRoles('ADMIN', 'OWNER')
-  @ApiOperation({
-    summary: 'Agregar usuario al negocio',
-    description: 'Requiere rol ADMIN o OWNER dentro del negocio',
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Usuario agregado al negocio',
-    type: BusinessUserResponseDto,
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'El usuario ya pertenece al negocio',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Usuario no encontrado',
-  })
-  async addUser(
-    @GetUser('id') addBy: string,
-    @CurrentBusiness() businessId: string,
-    @Body() dto: CreateBusinessUserDto,
-  ) {
-    return this.businessUserService.addUserToBusiness(businessId, dto, addBy);
-  }
+  // No hay alta directa de miembros: entran aceptando una invitación
+  // (POST /invitations con type BUSINESS_USER).
 
   @Get()
   @BusinessRoles('ADMIN', 'OWNER', 'CASHIER', 'VIEWER')

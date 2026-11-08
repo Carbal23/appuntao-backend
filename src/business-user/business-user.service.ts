@@ -1,13 +1,10 @@
 import {
   Injectable,
-  BadRequestException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateBusinessUserDto } from './dto/create-business-user.dto';
 import { UpdateBusinessUserDto } from './dto/update-business-user.dto';
-import { BusinessUserRole } from '@prisma/client';
 import { BusinessUserResponse } from './interfaces/business-user.interface';
 import { AuditService } from 'src/audit/audit.service';
 import { AuditAction } from 'src/audit/audit.types';
@@ -21,58 +18,6 @@ export class BusinessUserService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
   ) {}
-
-  async addUserToBusiness(
-    businessId: string,
-    dto: CreateBusinessUserDto,
-    addBy: string,
-  ): Promise<BusinessUserResponse> {
-    const { userId, role } = dto;
-
-    const exists = await this.prisma.businessUser.findUnique({
-      where: {
-        businessId_userId: { businessId, userId },
-      },
-    });
-    if (exists)
-      throw new BadRequestException('El usuario ya pertenece al negocio');
-
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException('Usuario no registrado en la app');
-
-    const newBusinessUser = await this.prisma.businessUser.create({
-      data: {
-        businessId,
-        userId,
-        role: role || BusinessUserRole.VIEWER,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-          },
-        },
-      },
-    });
-
-    await this.auditService.log({
-      userId: addBy,
-      action: AuditAction.BUSINESS_USER_ADDED,
-      entity: 'BusinessUser',
-      entityId: newBusinessUser.id,
-      meta: {
-        userId,
-        businessId,
-        role,
-      },
-    });
-
-    return newBusinessUser;
-  }
 
   async getUsersByBusiness(businessId: string, query: PaginationDto) {
     const {

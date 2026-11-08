@@ -34,6 +34,8 @@ model User {
   refreshTokens   RefreshToken[]
   authLogs        AuthLog[]
   consents        UserConsent[]
+  invitationsCreated  Invitation[] @relation("InvitationsCreated")
+  invitationsAccepted Invitation[] @relation("InvitationsAccepted")
   transfersSent     BusinessOwnershipTransfer[] @relation("TransfersSent")
   transfersReceived BusinessOwnershipTransfer[] @relation("TransfersReceived")
 }
@@ -155,20 +157,33 @@ model PaymentGroup {
   @@index([reversedAt])
 }
 
+// Invitación de un negocio a una persona, dirigida a su correo o teléfono:
+// como empleado (BUSINESS_USER) o para vincularla con su registro de cliente
+// (DEBTOR). Le aparece en la app a quien tenga ese correo o teléfono, y solo
+// esa persona puede aceptarla. El código sirve para compartirla por fuera.
 model Invitation {
-  id         String            @id @default(uuid())
-  businessId String
-  debtorId   String?
-  email      String?
-  phone      String?
-  code       String            @unique
-  expiresAt  DateTime
-  status     InvitationStatus  @default(PENDING)
-  type       InvitationType    @default(DEBTOR)
-  role       BusinessUserRole?
-  createdAt  DateTime          @default(now())
-  business   Business          @relation("BusinessInvitations", fields: [businessId], references: [id])
-  debtor     Debtor?           @relation(fields: [debtorId], references: [id])
+  id           String            @id @default(uuid())
+  businessId   String
+  debtorId     String?
+  email        String?
+  phone        String?
+  code         String            @unique
+  expiresAt    DateTime
+  status       InvitationStatus  @default(PENDING)
+  type         InvitationType    @default(DEBTOR)
+  role         BusinessUserRole?
+  createdById  String?
+  acceptedById String?
+  respondedAt  DateTime?
+  createdAt    DateTime          @default(now())
+  business     Business          @relation("BusinessInvitations", fields: [businessId], references: [id])
+  debtor       Debtor?           @relation(fields: [debtorId], references: [id])
+  createdBy    User?             @relation("InvitationsCreated", fields: [createdById], references: [id])
+  acceptedBy   User?             @relation("InvitationsAccepted", fields: [acceptedById], references: [id])
+
+  @@index([businessId, status])
+  @@index([email, status])
+  @@index([phone, status])
 }
 
 model AuditLog {
@@ -341,6 +356,8 @@ enum PaymentType {
 enum InvitationStatus {
   PENDING
   ACCEPTED
+  REJECTED
+  CANCELLED
   EXPIRED
 }
 
