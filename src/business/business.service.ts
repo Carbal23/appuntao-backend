@@ -69,6 +69,10 @@ export class BusinessService {
       search,
       searchFields: ['name'],
       filters: {
+        // Un negocio cerrado no se lista: la guardia de negocio ya rechaza
+        // cualquier operación sobre él. Su dueño aún puede descargar sus datos
+        // (GET /business/:id/export) hasta que se eliminen.
+        inactivatedAt: null,
         OR: [{ ownerId: userId }, { businessUsers: { some: { userId } } }],
       },
     });

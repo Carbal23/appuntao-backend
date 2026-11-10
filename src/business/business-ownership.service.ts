@@ -171,6 +171,13 @@ export class BusinessOwnershipService {
         'Quien te propuso la transferencia ya no es el dueño del negocio',
       );
     }
+    const membership = await this.prisma.businessUser.findUnique({
+      where: { businessId_userId: { businessId: business.id, userId } },
+    });
+    if (!membership) {
+      await this.close(transfer, OwnershipTransferStatus.CANCELLED);
+      throw new BadRequestException('Ya no eres miembro de este negocio');
+    }
 
     await this.prisma.$transaction(async (tx) => {
       // La condición de estado impide aceptar dos veces la misma propuesta
