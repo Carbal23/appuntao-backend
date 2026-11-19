@@ -87,6 +87,17 @@ export class BusinessOwnershipController {
     );
   }
 
+  @Get(':id/ownership-transfers/history')
+  @ApiOperation({
+    summary: 'Últimas transferencias resueltas del negocio',
+    description:
+      'Hasta 3, de la más reciente a la más antigua: aceptadas, rechazadas, vencidas o canceladas en las que el usuario participó (como dueño que la propuso o como destinatario).',
+  })
+  @ApiResponse({ status: 200, type: [OwnershipTransferResponseDto] })
+  listHistory(@Param('id') businessId: string, @GetUser('id') userId: string) {
+    return this.ownership.listHistory(businessId, userId);
+  }
+
   @Get(':id/ownership-transfer')
   @ApiOperation({
     summary:

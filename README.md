@@ -312,32 +312,14 @@ La versión Java usa Flyway, que crea su propia tabla (`flyway_schema_history`).
 
 ## ⚖️ Documentos legales y aceptación (Ley 1581 de 2012)
 
-Para registrarse, el usuario debe aceptar los **términos y condiciones** y la **política de tratamiento de datos**. La ley exige conservar la prueba de esa autorización, así que el backend guarda:
-
-- **`LegalDocument`**: cada versión de cada documento, con su texto completo y su huella SHA-256. Una versión publicada **no se modifica**: si el texto cambia, se publica una versión nueva. La vigente de cada tipo es la más reciente con `publishedAt` ya cumplida.
-- **`UserConsent`**: qué versión aceptó cada usuario, cuándo, desde qué IP y con qué navegador o app. Solo se agregan filas.
-
-**Flujo:**
-
-1. El frontend obtiene los textos vigentes con `GET /api/legal/current` (público) y los muestra.
-2. En el registro (`POST /api/users`) envía `acceptedLegalDocumentIds` con los ids de **todos** los documentos vigentes. El usuario y sus aceptaciones se crean en una sola transacción.
-3. Login y refresh devuelven `pendingLegalDocuments`. Si no está vacío (por ejemplo, porque se publicó una versión nueva), el frontend muestra esos documentos (`GET /api/legal/pending`) y registra la aceptación con `POST /api/legal/accept`.
-
-**Publicar una versión nueva:**
-
-Los textos se guardan en el repositorio, en `legal/terms-and-conditions/<version>.md` y `legal/privacy-policy/<version>.md`, y se cargan en cada base con:
+Antes de registrarse y antes de crear un negocio, el usuario acepta la versión vigente de los documentos legales, y el backend guarda la prueba de cada aceptación. Modelos, campos, endpoints, reglas y cómo publicar una versión: [docs/modulos/legal.md](docs/modulos/legal.md).
 
 ```bash
-npm run legal:publish:local -- --type PRIVACY_POLICY --version 2026-10 --file legal/privacy-policy/2026-10.md --url https://fiao.co/privacidad
+npm run legal:publish:local -- --type PRIVACY_POLICY --version 2026-10 --file legal/privacy-policy/2026-10.md
+npm run legal:publish:local -- --list    # tipos del catálogo
 ```
 
-- `--type`: `TERMS_AND_CONDITIONS` o `PRIVACY_POLICY`.
-- `--url` (opcional): página pública donde también está publicado el texto.
-- `--published-at` (opcional): fecha desde la que rige; por defecto, ahora.
-
-El mismo comando existe para `development` y `production` (`legal:publish:development`, `legal:publish:production`). Publicar dos veces la misma versión con el mismo texto no hace nada; con un texto distinto, falla.
-
-> ⚠️ Sin documentos vigentes publicados, el registro responde 503. Al preparar un entorno nuevo, publica ambos documentos antes de abrir el registro.
+> ⚠️ Sin documentos vigentes publicados, el registro y la creación de negocios responden 503. Al preparar un entorno nuevo, publica los tres documentos justo después de la migración.
 
 ---
 

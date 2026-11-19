@@ -138,6 +138,7 @@ Todos requieren `Authorization: Bearer <token>`. Ninguno usa `x-business-id`: la
 | --- | --- | --- | --- |
 | `POST` | `/api/business/:id/ownership-transfer` | Dueño | Body `{ toUserId, password }`. Propone la transferencia a un miembro activo |
 | `GET` | `/api/business/:id/ownership-transfer` | Dueño o destinatario | Devuelve la transferencia vigente, o `null` |
+| `GET` | `/api/business/:id/ownership-transfers/history` | Quien participó | Devuelve las **3 últimas** ya resueltas en las que el usuario fue dueño o destinatario, de la más reciente a la más antigua. Una pendiente vencida se devuelve como `EXPIRED` aunque la tarea diaria todavía no la haya marcado |
 | `DELETE` | `/api/business/:id/ownership-transfer` | Dueño | Cancela la transferencia vigente |
 | `GET` | `/api/business/ownership-transfers/incoming` | Cualquiera | Devuelve las transferencias que el usuario tiene por responder |
 | `POST` | `/api/business/ownership-transfers/:transferId/accept` | Destinatario | Acepta: pasa a ser dueño y el anterior queda como `ADMIN` |
@@ -183,6 +184,7 @@ Es una decisión: sirve para investigar accesos indebidos y para probar lo que p
 - Al aceptar, el negocio cambia de dueño en una transacción: el nuevo queda `OWNER` y el anterior `ADMIN`.
 - Si al aceptar el negocio ya no está activo, cambió de dueño o el destinatario ya no es miembro, la transferencia se cancela y se responde 400.
 - Sacar a un miembro del equipo cancela las transferencias que tenía por responder.
+- **Cuando el miembro acepta o rechaza, el backend le envía un correo al dueño que la propuso** (`EmailProvider.sendOwnershipTransferResponse`, con Resend). Es un aviso: si el dueño no tiene correo o el envío falla, la respuesta queda guardada igual y el fallo solo se registra en el log. Las que vencen o se cancelan no envían correo; se ven en el historial.
 - El nuevo dueño tendrá pendiente el acuerdo de transmisión de datos para negocios (ver [legal](legal.md)), y la app se lo pide al aceptar.
 
 ### Exportar antes de cerrar
@@ -230,7 +232,7 @@ npm run maintenance:run:local   # o :development / :production
 | 403 | `ACCOUNT_DISABLED` | Login de una cuenta desactivada por un administrador |
 | 403 | — | No es el dueño del negocio, o no es `ADMIN` |
 | 404 | — | Transferencia o negocio no encontrados |
-| 409 | — | Ya hay una transferencia pendiente, o ya fue respondida |
+| 409 | — | Ya hay una transferencia pendiente, o se intenta responder una que ya no está pendiente. El mensaje depende del estado: "Ya aceptaste…", "Ya rechazaste…", "Esta propuesta venció" o "Esta propuesta ya no está vigente: el dueño la canceló o ya no eres parte del equipo" |
 
 La app decide según `error`, nunca según el texto de `message`.
 
@@ -241,6 +243,7 @@ La app decide según `error`, nunca según el texto de `message`.
 | `auth` | El login revisa el estado de la cuenta y reactiva |
 | `auth-log` | Eventos `ACCOUNT_DEACTIVATED`, `ACCOUNT_REACTIVATED`, `ACCOUNT_DELETION_REQUESTED`, `ACCOUNT_DELETION_CANCELLED`, `ACCOUNT_ANONYMIZED` |
 | `audit` | Eventos de transferencia, `BUSINESS_DATA_EXPORTED` y `BUSINESS_PURGED` |
+| `providers/email` | Correo al dueño cuando el miembro acepta o rechaza la transferencia |
 | `legal` | Marca las aceptaciones como revocadas al anonimizar; el nuevo dueño acepta el acuerdo para negocios |
 | `business-user` | Sacar a un miembro cancela sus transferencias pendientes |
 
@@ -250,4 +253,5 @@ La app decide según `error`, nunca según el texto de `message`.
 - **Decisión:** la anonimización conserva los datos de los negocios donde la persona era cliente. **Por qué:** son del negocio, que es el Responsable de esos datos, y no del usuario que se va.
 - **Decisión:** la transferencia necesita que el destinatario acepte. **Por qué:** ser dueño implica responder por el negocio y por los datos de sus clientes.
 - **Pendiente:** fijar un plazo de retención para `AuthLog` y anunciarlo en la política de datos.
+- **Pendiente:** avisar también por correo cuando una transferencia vence, y notificaciones push cuando la app las tenga.
 - **Pendiente:** Google Play pide además una **página web** donde se explique cómo pedir la eliminación sin la app.

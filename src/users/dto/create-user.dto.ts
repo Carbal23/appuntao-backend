@@ -59,10 +59,17 @@ export class CreateUserDto {
       '0c9d8e7f-6a5b-4c3d-2e1f-0a9b8c7d6e5f',
     ],
     description:
-      'Ids de los documentos legales vigentes que el usuario acepta (GET /legal/current). Deben ser todos los vigentes.',
+      'Ids de los documentos legales vigentes que el usuario acepta (GET /legal/current?audience=ALL_USERS). Deben estar todos los obligatorios.',
   })
-  @IsArray()
-  @ArrayNotEmpty()
-  @IsUUID('all', { each: true })
+  @IsArray({
+    message: 'acceptedLegalDocumentIds debe ser una lista de ids de documentos',
+  })
+  @ArrayNotEmpty({
+    message: 'Debes aceptar los documentos legales para crear tu cuenta',
+  })
+  @IsUUID('all', {
+    each: true,
+    message: 'Cada id de documento legal debe ser un UUID válido',
+  })
   acceptedLegalDocumentIds!: string[];
 }

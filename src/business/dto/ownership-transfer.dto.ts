@@ -47,6 +47,13 @@ export class OwnershipTransferResponseDto {
   @ApiProperty({ description: 'Fecha límite para responder' })
   expiresAt!: Date;
 
+  @ApiProperty({
+    nullable: true,
+    description:
+      'Cuándo dejó de estar pendiente (aceptada, rechazada, vencida o cancelada)',
+  })
+  respondedAt!: Date | null;
+
   @ApiProperty()
   createdAt!: Date;
 

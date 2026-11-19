@@ -1,8 +1,11 @@
-import { PartialType } from '@nestjs/mapped-types';
+import { OmitType, PartialType } from '@nestjs/mapped-types';
 import { CreateBusinessDto } from './create-business.dto';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
-export class UpdateBusinessDto extends PartialType(CreateBusinessDto) {
+// Las aceptaciones legales son de la creación, no de la edición.
+export class UpdateBusinessDto extends PartialType(
+  OmitType(CreateBusinessDto, ['acceptedLegalDocumentIds'] as const),
+) {
   @ApiPropertyOptional({ example: 'Mi negocio', maxLength: 100 })
   name?: string;
 
