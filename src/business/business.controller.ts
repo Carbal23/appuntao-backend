@@ -71,9 +71,21 @@ export class BusinessController {
     description: 'Negocio creado',
     type: BusinessResponseDto,
   })
-  @ApiResponse({ status: 400, description: 'Error de validación' })
-  create(@Body() dto: CreateBusinessDto, @GetUser('id') userId: string) {
-    return this.businessService.create(dto, userId);
+  @ApiResponse({
+    status: 400,
+    description:
+      'Error de validación, o no se aceptó la versión vigente de los documentos para negocios',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'No hay documentos para negocios publicados',
+  })
+  create(
+    @Body() dto: CreateBusinessDto,
+    @GetUser('id') userId: string,
+    @ReqContext() context: RequestContext,
+  ) {
+    return this.businessService.create(dto, userId, context);
   }
 
   @Get()

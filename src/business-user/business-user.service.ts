@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateBusinessUserDto } from './dto/update-business-user.dto';
+import { OwnershipTransferStatus } from '@prisma/client';
 import { BusinessUserResponse } from './interfaces/business-user.interface';
 import { AuditService } from 'src/audit/audit.service';
 import { AuditAction } from 'src/audit/audit.types';
@@ -162,9 +163,24 @@ export class BusinessUserService {
       throw new ForbiddenException('No puedes eliminarte a ti mismo');
     }
 
-    await this.prisma.businessUser.delete({
-      where: { id: businessUserId },
-    });
+    // Si tenía una transferencia del negocio por responder, se cancela: ya no
+    // es miembro y no puede pasar a ser el dueño.
+    await this.prisma.$transaction([
+      this.prisma.businessUser.delete({
+        where: { id: businessUserId },
+      }),
+      this.prisma.businessOwnershipTransfer.updateMany({
+        where: {
+          businessId: membership.businessId,
+          toUserId: membership.userId,
+          status: OwnershipTransferStatus.PENDING,
+        },
+        data: {
+          status: OwnershipTransferStatus.CANCELLED,
+          respondedAt: new Date(),
+        },
+      }),
+    ]);
 
     await this.auditService.log({
       userId: currentUserId,

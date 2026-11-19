@@ -17,11 +17,29 @@ Resumen de cada modelo de `prisma/schema.prisma`. El detalle de cómo los usa ca
 | `RefreshToken` | Refresh tokens guardados como hash, agrupados por familia (rotación) y asociados a un dispositivo |
 | `AuthLog` | Eventos de seguridad: logins, bloqueos, logouts, cambios de contraseña, reutilización de refresh tokens y eventos del ciclo de vida de la cuenta |
 | `AuditLog` | Auditoría de acciones: quién hizo qué, sobre qué entidad y con qué datos |
-| `LegalDocument` | Versiones de los términos y la política de datos, con su texto y huella SHA-256. No se modifican |
-| `UserConsent` | Qué versión aceptó cada usuario, cuándo y desde dónde |
-| `BusinessOwnershipTransfer` | Transferencia de la propiedad de un negocio a un miembro, pendiente de su aceptación |
+| `LegalDocumentKind` | Catálogo de tipos de documento legal: a quién se le exige, si es obligatorio y su título. Ver [legal](modulos/legal.md) |
+| `LegalDocument` | Cada versión publicada de un documento legal, con su texto y su huella SHA-256 |
+| `UserConsent` | Qué versión aceptó cada usuario, cuándo y desde dónde. `revokedAt` marca que retiró la autorización |
+| `BusinessOwnershipTransfer` | Propuesta del dueño de pasarle el negocio a un miembro, con estado y vencimiento. Ver [account-lifecycle](modulos/account-lifecycle.md) |
 
 Los montos usan `Decimal(12, 2)`.
+
+`schema.prisma` no lleva comentarios: lo que significa cada modelo, campo y valor de enum se documenta aquí y en el documento de cada módulo.
+
+## Enums
+
+| Enum | Valores |
+| --- | --- |
+| `Role` (rol en la plataforma) | `USER`: por defecto, cualquier usuario registrado. `ADMIN`: administrador de la plataforma (soporte), puede desactivar y reactivar cuentas. `MODERATOR` y `SUSPENDED` existen en el esquema pero no se usan |
+| `BusinessUserRole` (rol en un negocio) | `OWNER`: dueño (también está en `Business.ownerId`). `ADMIN`: gestiona el equipo, clientes, deudas y pagos. `CASHIER`: registra deudas y pagos y ve las deudas. `VIEWER`: solo lectura |
+| `DocumentType` | `CC`, `NIT`, `FOREIGNER` |
+| `DebtStatus` | `OPEN`, `PARTIAL` (con abonos), `PAID`, `CANCELLED` |
+| `PaymentType` / `PaymentMethod` | `PAYMENT`, `ADJUSTMENT`, `REVERSAL` / `CASH`, `TRANSFER`, `OTHER` |
+| `InvitationType` / `InvitationStatus` | `DEBTOR`, `BUSINESS_USER` / `PENDING`, `ACCEPTED`, `EXPIRED` |
+| `AuthLogEvent` | Eventos de seguridad: logins, bloqueos, logouts, cambios de contraseña y del ciclo de vida de la cuenta |
+| `InactivationSource` | Quién desactivó una cuenta: `SELF` o `ADMIN` |
+| `LegalAudience` | A quién se le exige un documento legal: `ALL_USERS` o `BUSINESS_OWNERS` |
+| `OwnershipTransferStatus` | `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`, `EXPIRED` |
 
 ## Migraciones
 

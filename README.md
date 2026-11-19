@@ -53,8 +53,8 @@ npm run start:local
 | `npm run migrate:status:<entorno>` | Muestra las migraciones pendientes (`local`, `development`, `production`) |
 | `npm run migrate:deploy:<entorno>` | Aplica las migraciones pendientes (`development`, `production`) |
 | `npm run generate` | Regenera el cliente de Prisma |
-| `npm run legal:publish:<entorno> -- ...` | Publica una versión de un documento legal ([detalle](docs/modulos/legal.md#publicar-una-versión-nueva)) |
-| `npm run maintenance:run:<entorno>` | Ejecuta a mano la tarea diaria de cuentas; requiere `npm run build` antes ([detalle](docs/modulos/account-lifecycle.md#tarea-diaria)) |
+| `npm run legal:publish:<entorno> -- --type … --version … --file …` | Publica una versión de un documento legal (`--list` muestra los tipos). Ver [docs/modulos/legal.md](docs/modulos/legal.md) |
+| `npm run maintenance:run:<entorno>` | Ejecuta a mano la tarea diaria de cuentas (requiere `npm run build`). Ver [docs/modulos/account-lifecycle.md](docs/modulos/account-lifecycle.md) |
 | `npm run lint` / `npm run format` | ESLint y Prettier |
 | `npm test` | Pruebas unitarias |
 
@@ -73,6 +73,7 @@ src/
 ├── prisma/        PrismaService
 └── providers/     integraciones externas (email)
 scripts/           scripts de operación (publicar documentos legales)
+legal/             textos de los documentos legales, una carpeta por tipo
 docs/              documentación del proyecto
 ```
 

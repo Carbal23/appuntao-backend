@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AuthLogEvent, Prisma, Role } from '@prisma/client';
+import { AuthLogEvent, LegalAudience, Prisma, Role } from '@prisma/client';
 import { CreateUserDto } from './dto/create-user.dto';
 import * as bcrypt from 'bcrypt';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -43,7 +43,10 @@ export class UsersService {
     context?: RequestContext,
   ): Promise<UserSafe> {
     const { acceptedLegalDocumentIds, ...userData } = data;
-    await this.legalService.assertAcceptsAllCurrent(acceptedLegalDocumentIds);
+    await this.legalService.assertAcceptsCurrent(
+      acceptedLegalDocumentIds,
+      LegalAudience.ALL_USERS,
+    );
 
     const existingUser = await this.prisma.user.findFirst({
       where: {

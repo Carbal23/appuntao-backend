@@ -121,7 +121,7 @@ export class BusinessExportService {
     );
 
     const workbook = new Workbook();
-    workbook.creator = 'APPUNTAO';
+    workbook.creator = 'Appuntao';
     workbook.created = new Date();
 
     const summary = workbook.addWorksheet('Resumen');

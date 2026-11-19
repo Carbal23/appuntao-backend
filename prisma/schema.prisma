@@ -21,10 +21,9 @@ model User {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   inactivatedAt   DateTime?
-  inactivatedBy   InactivationSource?
+  inactivatedBy       InactivationSource?
   deletionRequestedAt DateTime?
   deletionScheduledAt DateTime?
-  // Datos personales eliminados. Es definitivo: la cuenta no se recupera.
   anonymizedAt        DateTime?
   businesses      Business[]     @relation("OwnerBusinesses")
   businessUsers   BusinessUser[]
@@ -157,10 +156,6 @@ model PaymentGroup {
   @@index([reversedAt])
 }
 
-// Invitación de un negocio a una persona, dirigida a su correo o teléfono:
-// como empleado (BUSINESS_USER) o para vincularla con su registro de cliente
-// (DEBTOR). Le aparece en la app a quien tenga ese correo o teléfono, y solo
-// esa persona puede aceptarla. El código sirve para compartirla por fuera.
 model Invitation {
   id           String            @id @default(uuid())
   businessId   String
@@ -253,15 +248,28 @@ enum InactivationSource {
   ADMIN
 }
 
+model LegalDocumentKind {
+  code      String          @id
+  title     String
+  audience  LegalAudience   @default(ALL_USERS)
+  required  Boolean         @default(true)
+  sortOrder Int             @default(0)
+  active    Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  documents LegalDocument[]
+}
+
 model LegalDocument {
   id          String            @id @default(uuid())
-  type        LegalDocumentType
+  type        String
   version     String
-  content     String 
-  contentHash String // SHA-256 del texto: prueba de qué se aceptó exactamente
-  url         String? // página pública donde también está publicado
+  content     String
+  contentHash String
+  url         String?
   publishedAt DateTime
   createdAt   DateTime          @default(now())
+  kind        LegalDocumentKind @relation(fields: [type], references: [code])
   consents    UserConsent[]
 
   @@unique([type, version])
@@ -275,7 +283,7 @@ model UserConsent {
   acceptedAt DateTime      @default(now())
   ipAddress  String?
   userAgent  String?
-  revokedAt  DateTime? // el usuario retiró la autorización (eliminó su cuenta)
+  revokedAt  DateTime?
   user       User          @relation(fields: [userId], references: [id])
   document   LegalDocument @relation(fields: [documentId], references: [id])
 
@@ -283,14 +291,11 @@ model UserConsent {
   @@index([userId])
 }
 
-enum LegalDocumentType {
-  TERMS_AND_CONDITIONS
-  PRIVACY_POLICY
+enum LegalAudience {
+  ALL_USERS
+  BUSINESS_OWNERS
 }
 
-// Propuesta del dueño de un negocio para pasarle la propiedad a un miembro.
-// El miembro debe aceptarla: ser dueño implica responder por el negocio y por
-// los datos de sus clientes. Solo puede haber una pendiente por negocio.
 model BusinessOwnershipTransfer {
   id          String                  @id @default(uuid())
   businessId  String
@@ -323,15 +328,15 @@ enum DocumentType {
 }
 
 enum Role {
-  USER // por defecto, cualquier usuario registrado
-  ADMIN // administrador de la plataforma (soporte, backoffice)
+  USER
+  ADMIN
 }
 
 enum BusinessUserRole {
-  OWNER // dueño del negocio (aunque también está en Business.ownerId)
-  ADMIN // puede gestionar usuarios, deudas, pagos
-  CASHIER // puede registrar pagos, ver deudas
-  VIEWER // solo lectura
+  OWNER
+  ADMIN
+  CASHIER
+  VIEWER
 }
 
 enum DebtStatus {

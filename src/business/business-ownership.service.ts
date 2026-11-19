@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -15,9 +16,27 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AuditService } from 'src/audit/audit.service';
 import { AuditAction } from 'src/audit/audit.types';
+import { EmailProvider } from 'src/providers/email.provider';
 
 /** Días que tiene el miembro para aceptar o rechazar la transferencia. */
 const TRANSFER_EXPIRATION_DAYS = 7;
+
+/**
+ * Qué se le dice a quien intenta responder una propuesta que ya no está
+ * pendiente. "Ya fue respondida" a secas confundía: la mayoría de las veces la
+ * canceló el dueño o lo sacaron del equipo, no la respondió él.
+ */
+const RESOLVED_MESSAGE: Record<OwnershipTransferStatus, string> = {
+  PENDING: 'La propuesta sigue pendiente',
+  ACCEPTED: 'Ya aceptaste esta propuesta',
+  REJECTED: 'Ya rechazaste esta propuesta',
+  CANCELLED:
+    'Esta propuesta ya no está vigente: el dueño la canceló o ya no eres parte del equipo',
+  EXPIRED: 'Esta propuesta venció',
+};
+
+/** Cuántas propuestas ya respondidas devuelve el historial de un negocio. */
+const HISTORY_LIMIT = 3;
 
 const personSelect = { id: true, firstName: true, lastName: true } as const;
 
@@ -29,9 +48,12 @@ const transferInclude = {
 
 @Injectable()
 export class BusinessOwnershipService {
+  private readonly logger = new Logger(BusinessOwnershipService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly emailProvider: EmailProvider,
   ) {}
 
   /** El dueño propone pasarle el negocio a uno de sus miembros. */
@@ -122,6 +144,41 @@ export class BusinessOwnershipService {
     return { message: 'Transferencia cancelada' };
   }
 
+  /**
+   * Las últimas propuestas ya resueltas del negocio (aceptadas, rechazadas,
+   * vencidas o canceladas) en las que el usuario participó. Así el dueño ve
+   * qué pasó con lo que propuso, también después de dejar de ser el dueño.
+   *
+   * Una pendiente cuyo plazo ya pasó se devuelve como `EXPIRED` aunque la
+   * tarea diaria todavía no la haya marcado.
+   */
+  async listHistory(businessId: string, userId: string) {
+    const now = new Date();
+    const transfers = await this.prisma.businessOwnershipTransfer.findMany({
+      where: {
+        businessId,
+        OR: [{ fromUserId: userId }, { toUserId: userId }],
+        NOT: {
+          status: OwnershipTransferStatus.PENDING,
+          expiresAt: { gt: now },
+        },
+      },
+      include: transferInclude,
+      orderBy: { createdAt: 'desc' },
+      take: HISTORY_LIMIT,
+    });
+
+    return transfers.map((transfer) =>
+      transfer.status === OwnershipTransferStatus.PENDING
+        ? {
+            ...transfer,
+            status: OwnershipTransferStatus.EXPIRED,
+            respondedAt: transfer.expiresAt,
+          }
+        : transfer,
+    );
+  }
+
   /** Transferencias que el usuario tiene por responder. */
   listIncoming(userId: string) {
     return this.prisma.businessOwnershipTransfer.findMany({
@@ -147,6 +204,8 @@ export class BusinessOwnershipService {
       meta: { transferId },
     });
 
+    await this.notifyOwner(transfer, userId, false);
+
     return { message: 'Transferencia rechazada' };
   }
 
@@ -170,6 +229,13 @@ export class BusinessOwnershipService {
       throw new BadRequestException(
         'Quien te propuso la transferencia ya no es el dueño del negocio',
       );
+    }
+    const membership = await this.prisma.businessUser.findUnique({
+      where: { businessId_userId: { businessId: business.id, userId } },
+    });
+    if (!membership) {
+      await this.close(transfer, OwnershipTransferStatus.CANCELLED);
+      throw new BadRequestException('Ya no eres miembro de este negocio');
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -214,10 +280,58 @@ export class BusinessOwnershipService {
       },
     });
 
+    await this.notifyOwner(transfer, userId, true);
+
     return { message: `Ahora eres el dueño de ${business.name}` };
   }
 
   // ---------------------------------------------------------- utilidades
+
+  /**
+   * Le avisa por correo a quien propuso la transferencia. Es un aviso: si el
+   * correo falla (o el dueño no tiene correo), la respuesta ya quedó guardada
+   * y no se revierte.
+   */
+  private async notifyOwner(
+    transfer: BusinessOwnershipTransfer,
+    responderId: string,
+    accepted: boolean,
+  ) {
+    try {
+      const [owner, responder, business] = await Promise.all([
+        this.prisma.user.findUnique({
+          where: { id: transfer.fromUserId },
+          select: { email: true },
+        }),
+        this.prisma.user.findUnique({
+          where: { id: responderId },
+          select: { firstName: true, lastName: true },
+        }),
+        this.prisma.business.findUnique({
+          where: { id: transfer.businessId },
+          select: { name: true },
+        }),
+      ]);
+      if (!owner?.email || !responder || !business) return;
+
+      // Resend no lanza cuando el envío falla: devuelve `{ error }`.
+      const result = await this.emailProvider.sendOwnershipTransferResponse(
+        owner.email,
+        {
+          businessName: business.name,
+          responderName: `${responder.firstName} ${responder.lastName}`.trim(),
+          accepted,
+        },
+      );
+      if (result.error) throw new Error(result.error.message);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo avisar la respuesta de la transferencia ${transfer.id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
 
   private findPending(businessId: string) {
     return this.prisma.businessOwnershipTransfer.findFirst({
@@ -248,7 +362,7 @@ export class BusinessOwnershipService {
       throw new NotFoundException('Transferencia no encontrada');
     }
     if (transfer.status !== OwnershipTransferStatus.PENDING) {
-      throw new ConflictException('La transferencia ya fue respondida');
+      throw new ConflictException(RESOLVED_MESSAGE[transfer.status]);
     }
     if (transfer.expiresAt <= new Date()) {
       await this.close(transfer, OwnershipTransferStatus.EXPIRED);
