@@ -153,9 +153,47 @@ Igual que el registro, con `?audience=BUSINESS_OWNERS` y `POST /api/business`.
 2. Al entrar, la app consulta `GET /api/legal/pending`, o lee `pendingLegalDocuments` del login.
 3. Si hay pendientes, muestra la pantalla de aceptación y llama `POST /api/legal/accept`.
 
-### Publicar una versión
+### Dónde están los textos
 
-Los textos se guardan en el repositorio, en `legal/<tipo>/<version>.md` (`legal/terms-and-conditions/`, `legal/privacy-policy/`, `legal/data-processing-agreement/`):
+Los textos se guardan en el repositorio, uno por archivo, en `legal/<tipo>/<version>.md`:
+
+| Carpeta | Tipo |
+| --- | --- |
+| `legal/terms-and-conditions/` | `TERMS_AND_CONDITIONS` |
+| `legal/privacy-policy/` | `PRIVACY_POLICY` |
+| `legal/data-processing-agreement/` | `DATA_PROCESSING_AGREEMENT` |
+
+El repositorio guarda la historia del texto y la base guarda lo que se publicó y cuándo. Como la huella SHA-256 se calcula del archivo, cualquiera puede comprobar que el texto publicado es el del repositorio.
+
+**Formato.** La app interpreta un Markdown mínimo (`parseLegalContent`, en `src/domain/legal.ts` de la app). Hay que respetarlo para que el documento se vea bien:
+
+- `# Título` una sola vez, al principio. El párrafo que lo sigue es la introducción.
+- `## N. Título de la cláusula` para cada cláusula. El número es el que aparece en el índice.
+- Párrafos separados por una línea en blanco. Las líneas seguidas se unen en un solo párrafo, así que los datos de contacto van en viñetas.
+- Viñetas con `- `.
+- `**negrita**` se acepta, pero la app la muestra como texto normal.
+- **No** se usan `###`, tablas, enlaces con `[texto](url)` ni imágenes: se mostrarían como texto crudo.
+
+### Del borrador al texto definitivo
+
+1. Se redacta el borrador en `legal/<tipo>/<version>.md`. Los datos que faltan van entre corchetes: `[RAZÓN SOCIAL]`, `[NIT]`, `[CIUDAD]`, `[PLAZO A DEFINIR]`.
+2. Se publica en **development** para verlo en la app como lo verá el usuario.
+3. El abogado lo revisa sobre el archivo.
+4. Con los cambios aplicados, se guarda como **archivo nuevo** con otro nombre de versión, por ejemplo `2026-12.md`. Una versión publicada no se edita: su huella es la prueba de lo que aceptaron los usuarios.
+5. Se publica en development y, cuando todo esté aprobado, en **production**. Los usuarios que aceptaron la versión anterior verán la pantalla de aceptación con la nueva.
+
+### Versiones publicadas
+
+| Entorno | Tipo | Versión | Fecha | Notas |
+| --- | --- | --- | --- | --- |
+| development | `TERMS_AND_CONDITIONS` | `2026-11-borrador` | 2026-11-19 | Borrador para revisión jurídica |
+| development | `PRIVACY_POLICY` | `2026-11-borrador` | 2026-11-19 | Borrador para revisión jurídica |
+| development | `DATA_PROCESSING_AGREEMENT` | `2026-11-borrador` | 2026-11-19 | Borrador para revisión jurídica |
+| production | — | — | — | Sin publicar |
+
+Actualiza esta tabla cada vez que publiques.
+
+### Publicar una versión
 
 ```bash
 npm run legal:publish:local -- --type PRIVACY_POLICY --version 2026-10 --file legal/privacy-policy/2026-10.md
@@ -205,5 +243,5 @@ En un entorno nuevo, o al desplegar la migración del catálogo, publica **los t
 - **Decisión:** catálogo en base de datos en lugar de un enum. **Por qué:** con un enum, la app necesitaba conocer la lista de tipos. Cuando el backend agregaba uno, la app vieja enviaba menos ids de los exigidos y el registro fallaba.
 - **Decisión:** el backend no bloquea a quien tiene pendientes. **Por qué:** bloquear en el backend rompería todas las pantallas a la vez; la app ya muestra la pantalla de aceptación.
 - **Decisión:** el acuerdo de transmisión es un documento aparte y solo para quien tiene negocio. **Por qué:** un cliente que solo consulta lo que debe no es Responsable de datos de nadie.
-- **Pendiente:** los textos definitivos de los tres documentos, revisados por un abogado. El acuerdo debe cubrir el uso de los recordatorios de cobro por WhatsApp.
+- **Pendiente:** los textos definitivos de los tres documentos. Los borradores están en `legal/` y publicados en development. En la revisión hay que completar lo que está entre corchetes: razón social, NIT, dirección, ciudad y el plazo de conservación de los registros de seguridad. También hay que confirmar lo dicho sobre los recordatorios de cobro por WhatsApp y la Ley 2300 de 2023.
 - **Pendiente:** retirar un consentimiento opcional. Hoy no hay endpoint para eso.
