@@ -105,8 +105,12 @@ export class InvitationsController {
     description:
       'Renueva la vigencia y vuelve a enviar el correo. El código no cambia.',
   })
-  resend(@Param('id') id: string, @CurrentBusiness() businessId: string) {
-    return this.invitations.resend(id, businessId);
+  resend(
+    @Param('id') id: string,
+    @CurrentBusiness() businessId: string,
+    @GetUser('id') userId: string,
+  ) {
+    return this.invitations.resend(id, businessId, userId);
   }
 
   @Delete(':id')

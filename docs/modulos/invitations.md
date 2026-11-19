@@ -2,7 +2,7 @@
 
 **Código:** `src/invitations/`
 
-> **Estado:** rediseño en `feature/invitations`, **sin revisar ni probar**. Este documento describe lo que hace el código; al final hay una lista de puntos para validar en las pruebas.
+> **Estado:** rediseño en `feature/invitations`. El backend se revisó y se probó por script el 2026-11-19, con 24 casos (ver [Qué se verificó](#qué-se-verificó)). Falta integrarlo con la app y probarlo en dispositivo.
 
 ## Propósito
 
@@ -12,6 +12,8 @@ Permite a un negocio invitar a una persona a:
 - **ver sus cuentas como cliente** (`DEBTOR`), vinculando su cuenta de usuario con su registro de deudor.
 
 La invitación va dirigida a un **correo o teléfono**. Le aparece en la app a quien tenga ese dato en su cuenta, y solo esa persona puede aceptarla. El código sirve para compartirla por fuera (correo, WhatsApp).
+
+**Es la única forma de vincular una cuenta con un cliente.** Antes, al registrarse, la cuenta se vinculaba sola con los clientes de **cualquier** negocio que tuvieran su mismo documento o teléfono. Eso dejaba que un negocio cualquiera "reclamara" a una persona registrando su número. Desde el commit `e24f320`, el vínculo solo se crea cuando la persona acepta una invitación `DEBTOR` del negocio. Los vínculos que ya existían se conservan.
 
 ## Alcance
 
@@ -49,7 +51,7 @@ Exigen `x-business-id` y rol `OWNER` o `ADMIN` en ese negocio.
 | --- | --- | --- |
 | `POST` | `/api/invitations` | Crear una invitación. Máximo 30 por hora por negocio |
 | `GET` | `/api/invitations?page&limit&status&type` | Listar las invitaciones del negocio, paginadas, de la más reciente a la más antigua |
-| `POST` | `/api/invitations/:id/resend` | Reenviar una pendiente: renueva la vigencia a 7 días y vuelve a enviar el correo. El código no cambia. Cuenta para el límite de 30 por hora |
+| `POST` | `/api/invitations/:id/resend` | Reenviar una pendiente: renueva la vigencia a 7 días y vuelve a enviar el correo. El código no cambia. Cuenta para el límite de 30 por hora y queda en auditoría (`INVITATION_RESENT`) |
 | `DELETE` | `/api/invitations/:id` | Cancelar una pendiente |
 | `GET` | `/api/invitations/business/:businessId` | **Obsoleto.** Igual que `GET /api/invitations`; rechaza si `:businessId` no coincide con `x-business-id` |
 
@@ -107,11 +109,11 @@ stateDiagram-v2
     PENDING --> ACCEPTED: la persona invitada acepta
     PENDING --> REJECTED: la persona invitada rechaza
     PENDING --> CANCELLED: el negocio cancela
-    PENDING --> EXPIRED: alguien intenta usarla vencida
+    PENDING --> EXPIRED: vence (tarea diaria o al intentar usarla)
     PENDING --> PENDING: reenviar (renueva vigencia)
 ```
 
-- **El vencimiento es perezoso.** Ninguna tarea programada marca las invitaciones como `EXPIRED`: se marcan cuando alguien intenta verla, aceptarla o rechazarla después de `expiresAt`. Mientras tanto siguen en `PENDING` con fecha pasada. `incoming` y la detección de duplicados filtran por `expiresAt`, así que no las muestran.
+- **Vencimiento.** La tarea diaria de las 3:00 a. m. (`account-lifecycle`) marca como `EXPIRED` las pendientes con `expiresAt` pasado. Si alguien intenta usar una vencida antes de esa hora, también se marca en ese momento. Entre tanto, `incoming` y la detección de duplicados filtran por `expiresAt`, así que nunca muestran una vencida.
 - `ACCEPTED`, `REJECTED`, `CANCELLED` y `EXPIRED` son finales. Al cerrarse se guarda `respondedAt`.
 
 ## Flujos
@@ -145,16 +147,17 @@ sequenceDiagram
 1. El negocio indica el `debtorId`. El deudor debe ser de ese negocio, estar activo y **no estar vinculado** a ninguna cuenta.
 2. Si no se envía correo ni teléfono, se usa el teléfono del deudor.
 3. Al aceptar, en la transacción se vincula el deudor a la cuenta (`Debtor.userId`), solo si sigue sin vincular y activo. Desde ahí el negocio aparece en `clientBusinesses` del dashboard del usuario.
+4. **Una cuenta es cliente una sola vez por negocio.** Si el negocio tiene dos registros de la misma persona y la invita desde los dos, la segunda aceptación responde 409 y la invitación sigue pendiente.
 
 ### Aceptar con código
 
-Para quien recibió el código por fuera de la app. El código no distingue mayúsculas ni espacios o guiones. La persona igual debe ser la destinataria: un código reenviado o filtrado no le sirve a nadie más.
+Para quien recibió el código por fuera de la app. El código no distingue mayúsculas ni espacios o guiones: se normaliza y se busca por el índice único. Solo si no aparece se busca sin distinguir mayúsculas, por las invitaciones viejas que tenían códigos en minúsculas. La persona igual debe ser la destinataria: un código reenviado o filtrado no le sirve a nadie más.
 
 ## Permisos y seguridad
 
 - **Solo la persona invitada responde.** Para ver por código, aceptar o rechazar, el correo o el teléfono de la invitación deben coincidir con los de la cuenta. Si no, 403.
 - **Código:** 10 caracteres de un alfabeto de 31 símbolos sin caracteres confundibles (sin `0/O`, `1/I/L`): unas 8 × 10^14 combinaciones. Además, ver y aceptar por código tienen límite de 10 por minuto.
-- **Límite por negocio:** crear y reenviar comparten un límite de 30 por hora **por negocio** (por `x-business-id`), sin importar el dispositivo. Evita usar APPUNTAO para envíos masivos de correo, que dañarían la reputación del dominio de envío.
+- **Límite por negocio:** crear y reenviar comparten un límite de 30 por hora **por negocio**, sin importar el dispositivo. El negocio se toma igual que en `BusinessContextGuard`: del header `x-business-id`, de la ruta o del query. Evita usar APPUNTAO para envíos masivos de correo, que dañarían la reputación del dominio de envío.
 - Los límites viven en memoria de cada instancia (igual que el de login).
 
 ## Integraciones
@@ -162,7 +165,8 @@ Para quien recibió el código por fuera de la app. El código no distingue may�
 | Con | Para qué |
 | --- | --- |
 | `providers/email.provider.ts` | Correos de invitación de cliente y de empleado (HTML y texto) |
-| `audit` | `INVITATION_CREATED`, `INVITATION_CANCELLED`, `INVITATION_ACCEPTED`, `INVITATION_REJECTED` |
+| `audit` | `INVITATION_CREATED`, `INVITATION_RESENT`, `INVITATION_CANCELLED`, `INVITATION_ACCEPTED`, `INVITATION_REJECTED` |
+| `account-lifecycle` | La tarea diaria marca las vencidas. Al borrar un negocio cerrado se borran sus invitaciones |
 | `auth` | `JwtAuthGuard`, `BusinessContextGuard`, `BusinessRoleGuard` |
 
 ## Errores
@@ -172,7 +176,7 @@ Para quien recibió el código por fuera de la app. El código no distingue may�
 | 400 | Faltan datos según el tipo (`role`, `debtorId`, correo o teléfono); campos que no aplican al tipo; cliente inactivo; invitación vencida; negocio inactivo al aceptar |
 | 403 | La invitación es para otro correo o teléfono; ruta obsoleta con un negocio distinto al activo |
 | 404 | Negocio, cliente o invitación no encontrados; código inválido |
-| 409 | Ya es miembro; cliente ya vinculado; invitación pendiente duplicada (`INVITATION_ALREADY_PENDING`); invitación ya respondida o cancelada; solo se reenvían pendientes |
+| 409 | Ya es miembro; cliente ya vinculado; ya es cliente de ese negocio desde otro registro; invitación pendiente duplicada (`INVITATION_ALREADY_PENDING`); invitación ya respondida o cancelada; solo se reenvían pendientes |
 | 429 | Límite de creación o de intentos con código superado |
 
 ## Migración
@@ -187,13 +191,25 @@ Las invitaciones anteriores al rediseño quedan con `createdById` en `null` y pu
 - **Decisión:** `listByBusiness` (obsoleto) compara la ruta con el negocio activo. **Por qué:** antes permitía ver invitaciones de otros negocios.
 - **Decisión:** compartir por WhatsApp con un enlace `wa.me`. **Por qué:** no requiere una integración paga; el negocio lo envía desde su teléfono.
 
-### Puntos para validar en las pruebas
+### Puntos de la revisión del 2026-11-19
 
-Detalles que salen de leer el código y que conviene confirmar al probar:
+| # | Punto | Resultado |
+| --- | --- | --- |
+| 1 | Cuentas sin correo ni teléfono no pueden recibir invitaciones | Sigue igual. El registro exige los dos desde este rediseño; solo afecta a cuentas viejas (ver [users.md](users.md#decisiones-y-pendientes)) |
+| 2 | Reenviar renueva siempre a 7 días y revive una vencida | **Se deja así a propósito**: reenviar es lo que se hace cuando a alguien se le pasó el plazo. Ahora queda en auditoría (`INVITATION_RESENT`) |
+| 3 | El límite por negocio contaba solo el header | **Corregido**: usa el mismo extractor que `BusinessContextGuard` |
+| 4 | Una cuenta podía quedar vinculada a dos clientes del mismo negocio | **Corregido**: la segunda aceptación responde 409 |
+| 5 | La búsqueda por código recorría la tabla | **Corregido**: busca por el índice único y solo después sin distinguir mayúsculas |
+| 6 | Dos aceptaciones simultáneas | **Probado**: una pasa y la otra responde 409 |
+| 7 | Las vencidas quedaban en `PENDING` | **Ya estaba resuelto**: la tarea diaria las marca `EXPIRED` |
 
-1. **Usuarios sin correo ni teléfono.** ~~El registro permitía crear una cuenta solo con documento~~. Ahora el registro exige ambos datos. Las cuentas creadas antes de ese cambio, si no tienen correo ni teléfono, siguen sin poder ver ni aceptar invitaciones (ver pendientes en [users.md](users.md#decisiones-y-pendientes)).
-2. **Reenviar renueva siempre a 7 días**, aunque la invitación se hubiera creado con otro `expiresInDays`. También revive una invitación vencida que siga en `PENDING` (por el vencimiento perezoso). Reenviar **no queda en la auditoría**.
-3. **El límite por negocio usa solo el header `x-business-id`.** Si el negocio llega por parámetro o query, todas esas peticiones comparten un mismo contador (`invitations:none`).
-4. **Un usuario puede quedar vinculado a dos deudores del mismo negocio** si el negocio lo invita desde dos registros de cliente distintos. No hay validación que lo impida.
-5. **La búsqueda por código no distingue mayúsculas** (`mode: 'insensitive'`), así que no usa el índice único de `code` y recorre la tabla. Con pocas invitaciones no importa; si la tabla crece, conviene normalizar los códigos viejos a mayúsculas y buscar por igualdad exacta.
-6. **Concurrencia al aceptar:** probar dos aceptaciones simultáneas de la misma invitación. La segunda debe responder 409.
+### Qué se verificó
+
+Script contra una base desechable con todas las migraciones aplicadas, en el mismo orden en que las recibe development:
+
+- **Equipo:** sin rol responde 400; duplicado pendiente, 409; solo la destinataria la ve en `incoming`; otra cuenta con el código recibe 403; el código se encuentra con minúsculas, espacios y guiones; dos aceptaciones a la vez dejan una sola; ya miembro, 409.
+- **Correo y reenvío:** sin correo no se envía; con correo sí; el enlace de WhatsApp lleva el 57; reenviar renueva la vigencia y queda auditado; reenviar una cancelada responde 409.
+- **Clientes:** sin dato de contacto usa el teléfono del cliente; aceptar vincula el registro; un segundo registro del mismo negocio responde 409 y la transacción se revierte; invitar a un cliente ya vinculado responde 409.
+- **Cierre:** rechazar deja `REJECTED`; aceptar una vencida responde 400 y la marca `EXPIRED`; las de un negocio cerrado no aparecen en `incoming`.
+
+**Falta:** la prueba en dispositivo con la app.

@@ -240,8 +240,12 @@ export class InvitationsService {
     return { message: 'Invitación cancelada' };
   }
 
-  /** Vuelve a enviar el correo y renueva la vigencia; el código no cambia. */
-  async resend(id: string, businessId: string) {
+  /**
+   * Vuelve a enviar el correo y renueva la vigencia a 7 días; el código no
+   * cambia. También revive una pendiente que ya venció: reenviar es justo
+   * lo que se hace cuando a alguien se le pasó el plazo.
+   */
+  async resend(id: string, businessId: string, actorId: string) {
     const existing = await this.requireBusinessInvitation(id, businessId);
     if (existing.status !== InvitationStatus.PENDING) {
       throw new ConflictException(
@@ -263,6 +267,14 @@ export class InvitationsService {
       business.name,
       DEFAULT_EXPIRATION_DAYS,
     );
+
+    await this.auditService.log({
+      userId: actorId,
+      action: AuditAction.INVITATION_RESENT,
+      entity: 'Invitation',
+      entityId: id,
+      meta: { businessId, emailSent },
+    });
 
     return {
       message: 'Invitación reenviada',
@@ -356,6 +368,17 @@ export class InvitationsService {
       }
 
       if (invitation.type === InvitationType.DEBTOR) {
+        // Una cuenta se vincula a un solo cliente por negocio: si el negocio
+        // la invitó desde dos registros, el segundo no se puede aceptar.
+        const alreadyClient = await tx.debtor.findFirst({
+          where: { businessId: invitation.businessId, userId: user.id },
+          select: { id: true },
+        });
+        if (alreadyClient) {
+          throw new ConflictException(
+            'Ya estás vinculado como cliente de este negocio. Pídele que use ese mismo registro.',
+          );
+        }
         const linked = await tx.debtor.updateMany({
           where: {
             id: invitation.debtorId!,
@@ -456,11 +479,16 @@ export class InvitationsService {
     });
   }
 
-  private async findByCode(code: string) {
-    // Las invitaciones anteriores tenían códigos en minúsculas.
-    const invitation = await this.prisma.invitation.findFirst({
-      where: { code: { equals: code, mode: 'insensitive' } },
-    });
+  private async findByCode(rawCode: string) {
+    // Mismo formato con que se generan: sin espacios ni guiones, en
+    // mayúsculas. Así la búsqueda usa el índice único de `code`.
+    const code = rawCode.replace(/[\s-]/g, '').toUpperCase();
+    const invitation =
+      (await this.prisma.invitation.findUnique({ where: { code } })) ??
+      // Las invitaciones anteriores al rediseño tenían códigos en minúsculas.
+      (await this.prisma.invitation.findFirst({
+        where: { code: { equals: code, mode: 'insensitive' } },
+      }));
     if (!invitation) throw new NotFoundException('Código inválido');
     return invitation;
   }
@@ -560,10 +588,10 @@ export class InvitationsService {
       : 'regístrate con este correo';
     const purpose =
       invitation.type === InvitationType.DEBTOR
-        ? 'a ver tus cuentas en APPUNTAO'
-        : `a unirte a su equipo en APPUNTAO como ${ROLE_LABELS[invitation.role!]}`;
+        ? 'a ver tus cuentas en Appuntao'
+        : `a unirte a su equipo en Appuntao como ${ROLE_LABELS[invitation.role!]}`;
 
-    const shareText = `Hola, ${businessName} te invita ${purpose}. Descarga APPUNTAO, inicia sesión o ${registerWith}, y acepta la invitación que te aparece en la app. Si te pide un código, es: ${invitation.code}`;
+    const shareText = `Hola, ${businessName} te invita ${purpose}. Descarga Appuntao, inicia sesión o ${registerWith}, y acepta la invitación que te aparece en la app. Si te pide un código, es: ${invitation.code}`;
 
     return {
       shareText,
