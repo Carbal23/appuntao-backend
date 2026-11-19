@@ -189,7 +189,13 @@ Es una decisión: sirve para investigar accesos indebidos y para probar lo que p
 
 ### Exportar antes de cerrar
 
-**Un negocio cerrado deja de aparecer en `GET /api/business`**, porque la guardia de negocio ya rechaza cualquier operación sobre él. Por eso la app ofrece la descarga **antes** de cerrarlo y en la pantalla de eliminar la cuenta, no después.
+**Un negocio cerrado deja de aparecer en `GET /api/business`**, porque la guardia de negocio ya rechaza cualquier operación sobre él. Por eso la app ofrece la descarga **antes**, no después. Está en tres lugares (desde el commit `4f0c783` de `dev` en la app):
+
+- **Perfil → Negocio → "Descargar información"**, siempre disponible para el dueño.
+- **El diálogo de cerrar el negocio**, con el botón "Descargar Excel primero".
+- **La pantalla de eliminar la cuenta**, en cada negocio del que es dueño, con la fecha de la última descarga.
+
+En el teléfono el archivo se guarda y se abre el menú de compartir; en web, el navegador lo descarga. Para eso el backend expone `Content-Disposition` en CORS.
 
 El endpoint sí funciona con el negocio cerrado: un dueño que tenga el id puede descargarlo hasta que se borre. `deletion-preview` devuelve `lastExportedAt` para que la app pueda decir "lo descargaste el…".
 
