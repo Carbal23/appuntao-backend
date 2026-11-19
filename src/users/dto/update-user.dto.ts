@@ -4,9 +4,9 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { DocumentType, Role } from '@prisma/client';
 
 // La contraseña no se cambia por aquí: va por PATCH /users/me/password, que
-// exige la contraseña actual.
+// exige la contraseña actual. Las aceptaciones legales van por /legal/accept.
 export class UpdateUserDto extends PartialType(
-  OmitType(CreateUserDto, ['password'] as const),
+  OmitType(CreateUserDto, ['password', 'acceptedLegalDocumentIds'] as const),
 ) {
   @ApiPropertyOptional({ example: 'Juan', required: false })
   firstName?: string;

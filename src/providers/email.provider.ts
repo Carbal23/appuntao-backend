@@ -212,4 +212,83 @@ export class EmailProvider {
       'Appuntao · Lleva el control de tus fiados',
     ].join('\n');
   }
+
+  /* ── Avisos ───────────────────────────────────────────────────────────── */
+
+  /**
+   * Le avisa al dueño que el miembro respondió su propuesta de pasarle el
+   * negocio. Sin esto, el dueño solo se enteraba si volvía a mirar la app.
+   */
+  async sendOwnershipTransferResponse(
+    to: string,
+    opts: { businessName: string; responderName: string; accepted: boolean },
+  ) {
+    const business = escapeHtml(opts.businessName);
+    const responder = escapeHtml(opts.responderName);
+    const heading = opts.accepted
+      ? `${opts.responderName} aceptó quedarse con ${opts.businessName}`
+      : `${opts.responderName} rechazó quedarse con ${opts.businessName}`;
+    const intro = opts.accepted
+      ? `<strong>${responder}</strong> aceptó tu propuesta: ahora es el dueño de <strong>${business}</strong> y tú quedaste como administrador.`
+      : `<strong>${responder}</strong> rechazó tu propuesta. <strong>${business}</strong> sigue siendo tuyo; si quieres, puedes proponérselo a alguien más desde la app.`;
+    const introText = opts.accepted
+      ? `${opts.responderName} aceptó tu propuesta: ahora es el dueño de ${opts.businessName} y tú quedaste como administrador.`
+      : `${opts.responderName} rechazó tu propuesta. ${opts.businessName} sigue siendo tuyo; si quieres, puedes proponérselo a alguien más desde la app.`;
+
+    return this.resend.emails.send({
+      from: this.from,
+      to,
+      subject: heading,
+      html: this.renderNotice({ heading: escapeHtml(heading), intro }),
+      text: [heading, '', introText, '', 'Appuntao'].join('\n'),
+    });
+  }
+
+  /** Correo informativo, sin código: misma cabecera y pie que las invitaciones. */
+  private renderNotice(opts: { heading: string; intro: string }): string {
+    return `<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+  </head>
+  <body style="margin:0;padding:0;background-color:${this.pageBg};">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${this.pageBg};">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background-color:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 8px 28px rgba(11,15,20,0.08);">
+            <tr>
+              <td style="background-color:${this.brand};padding:26px 32px;text-align:center;">
+                ${this.brandMark()}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px 32px 28px 32px;">
+                <h1 style="margin:0 0 12px 0;font-family:Arial,Helvetica,sans-serif;font-size:22px;line-height:28px;font-weight:800;color:${this.ink};">${opts.heading}</h1>
+                <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:${this.muted};">${opts.intro}</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 32px;border-top:1px solid #EEF1F4;text-align:center;">
+                <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#9AA4AE;">Recibes este correo porque propusiste pasar un negocio en Appuntao.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+  }
+}
+
+/** Los nombres los escriben los usuarios: no se insertan crudos en el HTML. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

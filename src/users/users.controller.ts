@@ -13,11 +13,22 @@ import { UserResponseDto } from './dto/user-response.dto';
 import type { UserSafe } from './user.select';
 import { ApiAuth } from 'src/common/swagger/auth.decorator';
 import { UserDashboardDto } from './dto/user-dashboard.dto';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { AccountLifecycleService } from 'src/account-lifecycle/account-lifecycle.service';
+import {
+  DeactivateAccountDto,
+  DeletionPreviewDto,
+  RequestAccountDeletionDto,
+} from 'src/account-lifecycle/dto/account-lifecycle.dto';
 
 @ApiTags('Users')
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly accountLifecycle: AccountLifecycleService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Registrar un nuevo usuario' })
@@ -30,8 +41,8 @@ export class UsersController {
     status: 400,
     description: 'Datos inválidos o usuario ya existente',
   })
-  create(@Body() data: CreateUserDto) {
-    return this.usersService.create(data);
+  create(@Body() data: CreateUserDto, @ReqContext() context: RequestContext) {
+    return this.usersService.create(data, context);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -112,18 +123,82 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @ApiAuth()
+  @Post('me/deactivate')
+  @ApiOperation({
+    summary: 'Desactivar la propia cuenta (reversible)',
+    description:
+      'Cierra todas las sesiones. El usuario la reactiva iniciando sesión con reactivate: true.',
+  })
+  @ApiResponse({ status: 201, description: 'Cuenta desactivada' })
+  @ApiResponse({ status: 400, description: 'La contraseña no es correcta' })
+  deactivateMe(
+    @GetUser('id') userId: string,
+    @Body() dto: DeactivateAccountDto,
+    @ReqContext() context: RequestContext,
+  ) {
+    return this.accountLifecycle.deactivate(userId, dto.password, context);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiAuth()
+  @Get('me/deletion-preview')
+  @ApiOperation({
+    summary: 'Qué pasará si el usuario elimina su cuenta',
+    description:
+      'Días de gracia y negocios activos de los que es dueño, con sus clientes y saldo por cobrar.',
+  })
+  @ApiResponse({ status: 200, type: DeletionPreviewDto })
+  deletionPreview(@GetUser('id') userId: string) {
+    return this.accountLifecycle.getDeletionPreview(userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiAuth()
+  @Post('me/deletion')
+  @ApiOperation({
+    summary: 'Solicitar la eliminación de la propia cuenta',
+    description:
+      'La cuenta queda inactiva y se anonimiza al terminar el plazo de gracia. Hasta entonces el usuario puede cancelarlo iniciando sesión con reactivate: true. Si es dueño de negocios activos debe enviar acknowledgeBusinessClosure: true.',
+  })
+  @ApiResponse({ status: 201, description: 'Eliminación programada' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Contraseña incorrecta, o falta confirmar el cierre de sus negocios (BUSINESS_CLOSURE_ACK_REQUIRED)',
+  })
+  requestDeletion(
+    @GetUser('id') userId: string,
+    @Body() dto: RequestAccountDeletionDto,
+    @ReqContext() context: RequestContext,
+  ) {
+    return this.accountLifecycle.requestDeletion(userId, dto, context);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @ApiAuth()
   @Patch(':id/inactivate')
-  @ApiOperation({ summary: 'Inactivar un usuario' })
-  @ApiResponse({
-    status: 200,
-    description: 'Usuario inactivado correctamente',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Usuario no encontrado',
-  })
-  inactivate(@Param('id') id: string, @GetUser() actor: UserSafe) {
-    return this.usersService.inactivate(id, actor);
+  @ApiOperation({ summary: 'Desactivar un usuario (solo ADMIN)' })
+  @ApiResponse({ status: 200, description: 'Usuario desactivado' })
+  @ApiResponse({ status: 403, description: 'No es administrador' })
+  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
+  inactivate(
+    @Param('id') id: string,
+    @GetUser('id') actorId: string,
+    @ReqContext() context: RequestContext,
+  ) {
+    return this.accountLifecycle.deactivateByAdmin(id, actorId, context);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @ApiAuth()
+  @Patch(':id/reactivate')
+  @ApiOperation({ summary: 'Reactivar un usuario (solo ADMIN)' })
+  @ApiResponse({ status: 200, description: 'Usuario reactivado' })
+  @ApiResponse({ status: 403, description: 'No es administrador' })
+  reactivate(@Param('id') id: string, @ReqContext() context: RequestContext) {
+    return this.accountLifecycle.reactivateByAdmin(id, context);
   }
 
   @UseGuards(JwtAuthGuard)

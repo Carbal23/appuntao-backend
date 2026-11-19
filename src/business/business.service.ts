@@ -7,29 +7,56 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateBusinessDto } from './dto/create-business.dto';
 import { UpdateBusinessDto } from './dto/update-business.dto';
-import { BusinessUserRole } from '@prisma/client';
+import { BusinessUserRole, LegalAudience } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 import { AuditService } from 'src/audit/audit.service';
 import { AuditAction } from 'src/audit/audit.types';
 import { PaginationDto } from 'src/common/pagination/dto/pagination.dto';
 import { buildWhere } from 'src/common/pagination/utils/build-where.util';
 import { paginate } from 'src/common/pagination/utils/paginate.util';
 import { buildOrder } from 'src/common/pagination/utils/build-order.util';
+import { LegalService } from 'src/legal/legal.service';
+import type { RequestContext } from 'src/auth-log/auth-log.types';
 
 @Injectable()
 export class BusinessService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly config: ConfigService,
+    private readonly legalService: LegalService,
   ) {}
 
-  async create(createBusinessDto: CreateBusinessDto, userId: string) {
+  async create(
+    createBusinessDto: CreateBusinessDto,
+    userId: string,
+    context?: RequestContext,
+  ) {
+    const { acceptedLegalDocumentIds = [], ...businessData } =
+      createBusinessDto;
+
+    // Quien crea un negocio pasa a ser Responsable de los datos de sus
+    // clientes: antes tiene que aceptar los documentos para negocios.
+    await this.legalService.assertAcceptsCurrent(
+      acceptedLegalDocumentIds,
+      LegalAudience.BUSINESS_OWNERS,
+      userId,
+    );
+
     return this.prisma.$transaction(async (tx) => {
       const business = await tx.business.create({
         data: {
-          ...createBusinessDto,
+          ...businessData,
           ownerId: userId,
         },
       });
+
+      await this.legalService.recordConsents(
+        tx,
+        userId,
+        acceptedLegalDocumentIds,
+        context,
+      );
 
       await tx.businessUser.create({
         data: {
@@ -67,6 +94,10 @@ export class BusinessService {
       search,
       searchFields: ['name'],
       filters: {
+        // Un negocio cerrado no se lista: la guardia de negocio ya rechaza
+        // cualquier operación sobre él. Su dueño aún puede descargar sus datos
+        // (GET /business/:id/export) hasta que se eliminen.
+        inactivatedAt: null,
         OR: [{ ownerId: userId }, { businessUsers: { some: { userId } } }],
       },
     });
@@ -195,11 +226,10 @@ export class BusinessService {
       );
     }
 
+    const inactivatedAt = new Date();
     await this.prisma.business.update({
       where: { id },
-      data: {
-        inactivatedAt: new Date(),
-      },
+      data: { inactivatedAt },
     });
 
     await this.auditService.log({
@@ -209,6 +239,17 @@ export class BusinessService {
       entityId: id,
     });
 
-    return { message: 'Negocio inactivado correctamente' };
+    // Los datos de un negocio inactivo se eliminan pasado el plazo de
+    // retención; hasta entonces el dueño puede descargarlos.
+    const dataDeletionScheduledAt = new Date(inactivatedAt);
+    dataDeletionScheduledAt.setUTCMonth(
+      dataDeletionScheduledAt.getUTCMonth() +
+        this.config.getOrThrow<number>('account.closedBusinessRetentionMonths'),
+    );
+
+    return {
+      message: `Negocio inactivado correctamente. Su información se eliminará el ${new Intl.DateTimeFormat('es-CO', { dateStyle: 'long', timeZone: 'America/Bogota' }).format(dataDeletionScheduledAt)}; hasta entonces puedes descargarla.`,
+      dataDeletionScheduledAt,
+    };
   }
 }

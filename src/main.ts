@@ -30,7 +30,9 @@ async function bootstrap() {
     SwaggerModule.setup('docs', app, document);
   }
 
-  app.enableCors();
+  // Content-Disposition se expone para que el frontend web pueda leer el
+  // nombre de los archivos que descarga (por ejemplo, el Excel del negocio).
+  app.enableCors({ exposedHeaders: ['Content-Disposition'] });
   await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }
 

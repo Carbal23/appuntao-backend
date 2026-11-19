@@ -21,6 +21,10 @@ model User {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   inactivatedAt   DateTime?
+  inactivatedBy       InactivationSource?
+  deletionRequestedAt DateTime?
+  deletionScheduledAt DateTime?
+  anonymizedAt        DateTime?
   businesses      Business[]     @relation("OwnerBusinesses")
   businessUsers   BusinessUser[]
   createdDebts    Debt[]         @relation("UserCreatedDebts")
@@ -28,6 +32,9 @@ model User {
   createdPayments Payment[]      @relation("UserCreatedPayments")
   refreshTokens   RefreshToken[]
   authLogs        AuthLog[]
+  consents        UserConsent[]
+  transfersSent     BusinessOwnershipTransfer[] @relation("TransfersSent")
+  transfersReceived BusinessOwnershipTransfer[] @relation("TransfersReceived")
 }
 
 model Business {
@@ -46,6 +53,7 @@ model Business {
   payments      Payment[]
   invitations   Invitation[]   @relation("BusinessInvitations")
   paymentGroups PaymentGroup[]
+  ownershipTransfers BusinessOwnershipTransfer[]
 }
 
 model BusinessUser {
@@ -217,6 +225,89 @@ enum AuthLogEvent {
   PASSWORD_CHANGED
   PASSWORD_CHANGE_FAILED
   REFRESH_TOKEN_REUSED
+  ACCOUNT_DEACTIVATED
+  ACCOUNT_REACTIVATED
+  ACCOUNT_DELETION_REQUESTED
+  ACCOUNT_DELETION_CANCELLED
+  ACCOUNT_ANONYMIZED
+}
+
+enum InactivationSource {
+  SELF
+  ADMIN
+}
+
+model LegalDocumentKind {
+  code      String          @id
+  title     String
+  audience  LegalAudience   @default(ALL_USERS)
+  required  Boolean         @default(true)
+  sortOrder Int             @default(0)
+  active    Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  documents LegalDocument[]
+}
+
+model LegalDocument {
+  id          String            @id @default(uuid())
+  type        String
+  version     String
+  content     String
+  contentHash String
+  url         String?
+  publishedAt DateTime
+  createdAt   DateTime          @default(now())
+  kind        LegalDocumentKind @relation(fields: [type], references: [code])
+  consents    UserConsent[]
+
+  @@unique([type, version])
+  @@index([type, publishedAt])
+}
+
+model UserConsent {
+  id         String        @id @default(uuid())
+  userId     String
+  documentId String
+  acceptedAt DateTime      @default(now())
+  ipAddress  String?
+  userAgent  String?
+  revokedAt  DateTime?
+  user       User          @relation(fields: [userId], references: [id])
+  document   LegalDocument @relation(fields: [documentId], references: [id])
+
+  @@unique([userId, documentId])
+  @@index([userId])
+}
+
+enum LegalAudience {
+  ALL_USERS
+  BUSINESS_OWNERS
+}
+
+model BusinessOwnershipTransfer {
+  id          String                  @id @default(uuid())
+  businessId  String
+  fromUserId  String
+  toUserId    String
+  status      OwnershipTransferStatus @default(PENDING)
+  expiresAt   DateTime
+  respondedAt DateTime?
+  createdAt   DateTime                @default(now())
+  business    Business                @relation(fields: [businessId], references: [id])
+  fromUser    User                    @relation("TransfersSent", fields: [fromUserId], references: [id])
+  toUser      User                    @relation("TransfersReceived", fields: [toUserId], references: [id])
+
+  @@index([businessId, status])
+  @@index([toUserId, status])
+}
+
+enum OwnershipTransferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  EXPIRED
 }
 
 enum DocumentType {
@@ -226,17 +317,17 @@ enum DocumentType {
 }
 
 enum Role {
-  USER // por defecto, cualquier usuario registrado
-  ADMIN // administrador de la plataforma (ej. soporte, superadmin)
-  MODERATOR // opcional, revisión de contenidos o incidencias
-  SUSPENDED // cuenta bloqueada
+  USER
+  ADMIN
+  MODERATOR
+  SUSPENDED
 }
 
 enum BusinessUserRole {
-  OWNER // dueño del negocio (aunque también está en Business.ownerId)
-  ADMIN // puede gestionar usuarios, deudas, pagos
-  CASHIER // puede registrar pagos, ver deudas
-  VIEWER // solo lectura
+  OWNER
+  ADMIN
+  CASHIER
+  VIEWER
 }
 
 enum DebtStatus {

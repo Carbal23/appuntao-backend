@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -41,4 +42,13 @@ export class LoginDto {
   @IsString()
   @MaxLength(100)
   deviceName?: string;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Enviar true para reactivar una cuenta desactivada por el propio usuario o cancelar una eliminación pendiente (después de recibir 403 ACCOUNT_DEACTIVATED o ACCOUNT_DELETION_PENDING).',
+  })
+  @IsOptional()
+  @IsBoolean()
+  reactivate?: boolean;
 }

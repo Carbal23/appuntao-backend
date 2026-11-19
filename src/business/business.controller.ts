@@ -7,7 +7,10 @@ import {
   Param,
   UseGuards,
   Query,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { BusinessService } from './business.service';
 import { CreateBusinessDto } from './dto/create-business.dto';
 import { UpdateBusinessDto } from './dto/update-business.dto';
@@ -19,13 +22,47 @@ import { ApiAuth } from 'src/common/swagger/auth.decorator';
 import { BusinessResponseDto } from './dto/business-response.dto';
 import { PaginatedBusinessResponseDto } from './dto/paginated-business-response.dto';
 import { BusinessDetailResponseDto } from './dto/business-detail-response.dto';
+import { BusinessExportService } from './business-export.service';
+import { ReqContext } from 'src/common/decorators/request-context.decorator';
+import type { RequestContext } from 'src/auth-log/auth-log.types';
 
 @ApiTags('Business')
 @Controller('business')
 @UseGuards(JwtAuthGuard)
 @ApiAuth()
 export class BusinessController {
-  constructor(private readonly businessService: BusinessService) {}
+  constructor(
+    private readonly businessService: BusinessService,
+    private readonly businessExport: BusinessExportService,
+  ) {}
+
+  @Get(':id/export')
+  @ApiOperation({
+    summary: 'Descargar la información del negocio en Excel (solo el dueño)',
+    description:
+      'Archivo .xlsx con las hojas Resumen, Clientes, Deudas y Pagos. Funciona también con el negocio inactivo. Cada descarga queda registrada.',
+  })
+  @ApiResponse({ status: 200, description: 'Archivo .xlsx' })
+  @ApiResponse({ status: 403, description: 'No es el dueño' })
+  @ApiResponse({ status: 404, description: 'Negocio no encontrado' })
+  async export(
+    @Param('id') id: string,
+    @GetUser('id') userId: string,
+    @ReqContext() context: RequestContext,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { filename, content } = await this.businessExport.exportBusiness(
+      id,
+      userId,
+      context,
+    );
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return new StreamableFile(content);
+  }
 
   @Post()
   @ApiOperation({ summary: 'Crear un negocio' })
@@ -34,9 +71,21 @@ export class BusinessController {
     description: 'Negocio creado',
     type: BusinessResponseDto,
   })
-  @ApiResponse({ status: 400, description: 'Error de validación' })
-  create(@Body() dto: CreateBusinessDto, @GetUser('id') userId: string) {
-    return this.businessService.create(dto, userId);
+  @ApiResponse({
+    status: 400,
+    description:
+      'Error de validación, o no se aceptó la versión vigente de los documentos para negocios',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'No hay documentos para negocios publicados',
+  })
+  create(
+    @Body() dto: CreateBusinessDto,
+    @GetUser('id') userId: string,
+    @ReqContext() context: RequestContext,
+  ) {
+    return this.businessService.create(dto, userId, context);
   }
 
   @Get()

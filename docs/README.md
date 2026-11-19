@@ -28,8 +28,10 @@ Cada módulo tiene su documento con propósito, alcance, endpoints, reglas de ne
 | `invitations` | Invitaciones a deudores y miembros del equipo | Pendiente |
 | `audit` | Registro de auditoría de acciones | Pendiente |
 | `health` | Health check para el despliegue | Pendiente |
+| `legal` | Documentos legales versionados (catálogo de tipos) y prueba de aceptación (Ley 1581) | [legal.md](modulos/legal.md) |
+| `account-lifecycle` | Desactivar y eliminar la cuenta, transferir y exportar negocios, tarea diaria de retención | [account-lifecycle.md](modulos/account-lifecycle.md) |
 
-> Los módulos que todavía viven en otra rama (por ejemplo `account-lifecycle` o documentos legales) se documentan en esa rama, para que el documento llegue junto con su código.
+> Los módulos que todavía viven en otra rama (por ejemplo `invitations`) se documentan en esa rama, para que el documento llegue junto con su código.
 
 ## Cómo mantener la documentación
 
