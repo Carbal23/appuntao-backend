@@ -33,10 +33,33 @@ Los scripts `migrate:*:<entorno>` cargan un archivo `.env.<entorno>` con `dotenv
 Se configuran en **Environment** del servicio. Ver la lista completa en [entornos-y-configuracion.md](entornos-y-configuracion.md). Las imprescindibles:
 
 - `NODE_ENV=production`
-- `DATABASE_URL` (pooler de Supabase)
-- `DIRECT_URL` (conexión directa de Supabase; la necesita `migrate deploy`)
+- `DATABASE_URL`: pooler de Supabase en **modo transacción**, puerto **6543**, con `?pgbouncer=true&connection_limit=5`
+- `DIRECT_URL`: pooler en **modo sesión**, puerto **5432**. La usa `migrate deploy`
 - `JWT_SECRET` (mínimo 32 caracteres)
 - `RESEND_API_KEY` y `EMAIL_FROM` (dominio verificado en Resend)
+
+### Conexiones a Supabase
+
+El pooler de Supabase tiene dos modos con límites distintos:
+
+| Modo | Puerto | Cómo reparte las conexiones | Para qué |
+| --- | --- | --- | --- |
+| Sesión | 5432 | Le da una conexión real a cada cliente mientras siga conectado. Tope de 15 en el plan gratuito | Migraciones (`DIRECT_URL`) |
+| Transacción | 6543 | Presta la conexión solo mientras dura cada consulta o transacción | La app (`DATABASE_URL`) |
+
+**Por qué `connection_limit=5`.** Prisma abre por defecto *núcleos × 2 + 1* conexiones, y en Render Node ve los núcleos de la máquina física. Con `DATABASE_URL` en el 5432, un solo proceso del backend llegó a ocupar las 15 conexiones del modo sesión, que quedaron tomadas aunque no se usaran. El siguiente build falló con `EMAXCONNSESSION` en `migrate deploy`, porque la instancia vieja seguía viva. Pasó el 2026-11-10 en development.
+
+**Si vuelve a pasar** (`max clients reached in session mode` en el build):
+
+1. Revisa que `DATABASE_URL` sea la del 6543.
+2. Suspende el servicio en Render (Settings → Suspend Web Service) para que la instancia vieja suelte las conexiones.
+3. Reanúdalo y lanza **Manual Deploy → Deploy latest commit**.
+
+La misma regla vale para los `.env.development` y `.env.production` locales. Un backend corriendo en tu máquina con el 5432 también ocupa cupos del modo sesión.
+
+### Después de un despliegue con migraciones de legal
+
+Si el despliegue aplica la migración del catálogo de documentos legales a un entorno sin documentos, **publícalos en seguida**. Mientras falten, el registro y la creación de negocios responden 503. Ver [legal](modulos/legal.md#del-borrador-al-texto-definitivo).
 
 ## Antes de fusionar a `master`
 
