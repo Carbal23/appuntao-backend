@@ -26,6 +26,8 @@ export enum AuditAction {
   DEBTOR_CREATED = 'DEBTOR_CREATED',
   DEBTOR_UPDATED = 'DEBTOR_UPDATED',
   DEBTOR_INACTIVATED = 'DEBTOR_INACTIVATED',
+  // La ficha deja de estar ligada a una cuenta. meta.by: BUSINESS o CLIENT.
+  DEBTOR_UNLINKED = 'DEBTOR_UNLINKED',
 
   //business
   BUSINESS_CREATED = 'BUSINESS_CREATED',

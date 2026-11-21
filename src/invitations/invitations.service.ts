@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  BusinessUserRole,
   Invitation,
   InvitationStatus,
   InvitationType,
@@ -80,6 +81,9 @@ export class InvitationsService {
       where: { id: businessId },
     });
     if (!business) throw new NotFoundException('Negocio no encontrado');
+
+    const actorRole = await this.actorRole(businessId, creatorId);
+    this.assertCanHandle(actorRole, dto.type);
 
     const email = dto.email;
     let phone = dto.phone;
@@ -187,6 +191,8 @@ export class InvitationsService {
         businessId,
         type: invitation.type,
         role: invitation.role,
+        debtorId: dto.debtorId ?? null,
+        actorRole,
         byEmail: !!email,
         byPhone: !!phone,
       },
@@ -200,8 +206,18 @@ export class InvitationsService {
     };
   }
 
-  async listForBusiness(businessId: string, query: ListInvitationsQueryDto) {
-    const { page = 1, limit = 10, status, type } = query;
+  async listForBusiness(
+    businessId: string,
+    actorId: string,
+    query: ListInvitationsQueryDto,
+  ) {
+    const { page = 1, limit = 10, status } = query;
+    // Un cajero solo ve las de clientes: las del equipo no son asunto suyo.
+    const actorRole = await this.actorRole(businessId, actorId);
+    const type =
+      actorRole === BusinessUserRole.CASHIER
+        ? InvitationType.DEBTOR
+        : query.type;
     const where: Prisma.InvitationWhereInput = {
       businessId,
       ...(status ? { status } : {}),
@@ -227,6 +243,10 @@ export class InvitationsService {
 
   async cancel(id: string, businessId: string, actorId: string) {
     const invitation = await this.requireBusinessInvitation(id, businessId);
+    this.assertCanHandle(
+      await this.actorRole(businessId, actorId),
+      invitation.type,
+    );
     this.assertPending(invitation);
 
     await this.close(invitation.id, InvitationStatus.CANCELLED);
@@ -235,6 +255,7 @@ export class InvitationsService {
       action: AuditAction.INVITATION_CANCELLED,
       entity: 'Invitation',
       entityId: id,
+      meta: { businessId, type: invitation.type },
     });
 
     return { message: 'Invitación cancelada' };
@@ -247,6 +268,10 @@ export class InvitationsService {
    */
   async resend(id: string, businessId: string, actorId: string) {
     const existing = await this.requireBusinessInvitation(id, businessId);
+    this.assertCanHandle(
+      await this.actorRole(businessId, actorId),
+      existing.type,
+    );
     if (existing.status !== InvitationStatus.PENDING) {
       throw new ConflictException(
         'Solo se pueden reenviar invitaciones pendientes',
@@ -273,7 +298,7 @@ export class InvitationsService {
       action: AuditAction.INVITATION_RESENT,
       entity: 'Invitation',
       entityId: id,
-      meta: { businessId, emailSent },
+      meta: { businessId, type: existing.type, emailSent },
     });
 
     return {
@@ -336,6 +361,7 @@ export class InvitationsService {
       action: AuditAction.INVITATION_REJECTED,
       entity: 'Invitation',
       entityId: id,
+      meta: { businessId: invitation.businessId, type: invitation.type },
     });
 
     return { message: 'Invitación rechazada' };
@@ -417,7 +443,13 @@ export class InvitationsService {
       action: AuditAction.INVITATION_ACCEPTED,
       entity: 'Invitation',
       entityId: invitation.id,
-      meta: { type: invitation.type, businessId: invitation.businessId },
+      meta: {
+        type: invitation.type,
+        businessId: invitation.businessId,
+        // La ficha que quedó vinculada: es la prueba de quién aceptó ver qué.
+        debtorId: invitation.debtorId,
+        role: invitation.role,
+      },
     });
 
     return {
@@ -431,6 +463,31 @@ export class InvitationsService {
   }
 
   // ---------------------------------------------------------- utilidades
+
+  /** Rol de quien actúa en el negocio. Las guardias ya validaron que es miembro. */
+  private async actorRole(
+    businessId: string,
+    userId: string,
+  ): Promise<BusinessUserRole | null> {
+    const membership = await this.prisma.businessUser.findFirst({
+      where: { businessId, userId },
+      select: { role: true },
+    });
+    return membership?.role ?? null;
+  }
+
+  /**
+   * El dueño y el administrador manejan las dos clases de invitación. El
+   * cajero solo las de clientes: es quien los atiende en el mostrador, pero
+   * no decide quién entra al equipo.
+   */
+  private assertCanHandle(role: BusinessUserRole | null, type: InvitationType) {
+    if (role === BusinessUserRole.CASHIER && type !== InvitationType.DEBTOR) {
+      throw new ForbiddenException(
+        'Solo el dueño o un administrador pueden invitar al equipo',
+      );
+    }
+  }
 
   /** Condiciones para encontrar invitaciones o usuarios por correo o teléfono. */
   private targetConditions(

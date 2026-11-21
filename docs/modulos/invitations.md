@@ -2,7 +2,7 @@
 
 **Código:** `src/invitations/`
 
-> **Estado:** rediseño en `feature/invitations`. El backend se revisó y se probó por script el 2026-11-19, con 24 casos (ver [Qué se verificó](#qué-se-verificó)). Falta integrarlo con la app y probarlo en dispositivo.
+> **Estado:** rediseño en `feature/invitations`, en el backend y en la app. El backend se probó por script el 2026-11-19, con 24 casos (ver [Qué se verificó](#qué-se-verificó)). Los flujos de equipo y de cliente se probaron desde la app el 2026-11-20. El 2026-11-21 se agregaron el permiso del cajero para invitar clientes y la desvinculación; eso falta probarlo.
 
 ## Propósito
 
@@ -23,6 +23,7 @@ La invitación va dirigida a un **correo o teléfono**. Le aparece en la app a q
 - Enviar el correo de invitación, si la invitación tiene correo.
 - Devolver un texto y un enlace de WhatsApp listos para que el negocio la comparta desde su teléfono.
 - Al aceptar: crear la membresía (`BusinessUser`) o vincular el deudor (`Debtor.userId`).
+- Deshacer el vínculo de un cliente, desde el negocio o desde el cliente (rutas en `debtors`, ver [Desvincular un cliente](#desvincular-un-cliente)).
 
 **No hace:**
 - Enviar SMS ni mensajes de WhatsApp: el negocio comparte el enlace desde su propio teléfono.
@@ -37,7 +38,7 @@ La invitación va dirigida a un **correo o teléfono**. Le aparece en la app a q
 | `Business` | Nombre para los mensajes; debe estar activo para aceptar |
 | `Debtor` | Para `DEBTOR`: el registro de cliente que se vincula |
 | `BusinessUser` | Para `BUSINESS_USER`: la membresía que se crea al aceptar |
-| `AuditLog` | Creación, cancelación, aceptación y rechazo (a través de `AuditService`) |
+| `AuditLog` | Creación, reenvío, cancelación, aceptación, rechazo y desvinculación (a través de `AuditService`) |
 
 ## Endpoints
 
@@ -45,7 +46,7 @@ Todos exigen `Authorization: Bearer <token>`.
 
 ### Lado del negocio
 
-Exigen `x-business-id` y rol `OWNER` o `ADMIN` en ese negocio.
+Exigen `x-business-id` y rol `OWNER`, `ADMIN` o `CASHIER` en ese negocio. **El cajero solo maneja invitaciones de clientes** (`DEBTOR`): si intenta crear, reenviar o cancelar una del equipo recibe 403, y al listar solo se le devuelven las de clientes. Es quien atiende a los clientes en el mostrador, pero no decide quién entra al equipo.
 
 | Método | Ruta | Qué hace |
 | --- | --- | --- |
@@ -146,8 +147,19 @@ sequenceDiagram
 
 1. El negocio indica el `debtorId`. El deudor debe ser de ese negocio, estar activo y **no estar vinculado** a ninguna cuenta.
 2. Si no se envía correo ni teléfono, se usa el teléfono del deudor.
-3. Al aceptar, en la transacción se vincula el deudor a la cuenta (`Debtor.userId`), solo si sigue sin vincular y activo. Desde ahí el negocio aparece en `clientBusinesses` del dashboard del usuario.
+3. Al aceptar, en la transacción se vincula el deudor a la cuenta (`Debtor.userId`), solo si sigue sin vincular y activo. Desde ahí el negocio aparece en `clientBusinesses` del dashboard del usuario, y sus deudas se leen con `GET /api/debtors/me/:debtorId/debts`. Ese endpoint solo responde si la ficha está vinculada a su cuenta (404 si no), no pide `x-business-id` ni ser del equipo, y devuelve todas las deudas con sus pagos, sin paginar. Las rutas del tendero (`/debtors/:id/debts`) exigen ser miembro y le responden 403 a un cliente.
 4. **Una cuenta es cliente una sola vez por negocio.** Si el negocio tiene dos registros de la misma persona y la invita desde los dos, la segunda aceptación responde 409 y la invitación sigue pendiente.
+
+### Desvincular un cliente
+
+El vínculo se puede deshacer por dos lados. En los dos casos la ficha, sus deudas y sus pagos no cambian: solo deja de estar ligada a la cuenta, y el negocio puede volver a invitarla.
+
+| Método | Ruta | Quién | Qué hace |
+| --- | --- | --- | --- |
+| `PATCH` | `/api/debtors/:id/unlink` | `OWNER` o `ADMIN`, con `x-business-id` | El negocio desvincula la ficha, por ejemplo si aceptó la persona equivocada. 409 si no estaba vinculada |
+| `DELETE` | `/api/debtors/me/:debtorId/link` | La cuenta vinculada | El cliente deja de ver la tienda en el modo cliente. 404 si la ficha no es suya |
+
+Las dos quedan en auditoría como `DEBTOR_UNLINKED`, con `meta.by` en `BUSINESS` o `CLIENT`, el negocio y la cuenta que estaba vinculada (`previousUserId`). Al eliminar una cuenta, `account-lifecycle` también suelta sus fichas; eso queda registrado como parte de la eliminación.
 
 ### Aceptar con código
 
@@ -165,16 +177,31 @@ Para quien recibió el código por fuera de la app. El código no distingue may�
 | Con | Para qué |
 | --- | --- |
 | `providers/email.provider.ts` | Correos de invitación de cliente y de empleado (HTML y texto) |
-| `audit` | `INVITATION_CREATED`, `INVITATION_RESENT`, `INVITATION_CANCELLED`, `INVITATION_ACCEPTED`, `INVITATION_REJECTED` |
+| `audit` | Ver [Auditoría](#auditoría) |
 | `account-lifecycle` | La tarea diaria marca las vencidas. Al borrar un negocio cerrado se borran sus invitaciones |
 | `auth` | `JwtAuthGuard`, `BusinessContextGuard`, `BusinessRoleGuard` |
+
+## Auditoría
+
+Toda acción de una persona queda en `AuditLog` con quien la hizo (`userId`), la invitación o la ficha (`entityId`) y el negocio en `meta.businessId`. Al purgar un negocio cerrado se borran por `entityId`.
+
+| Acción | Cuándo | `meta` |
+| --- | --- | --- |
+| `INVITATION_CREATED` | Crear | `businessId`, `type`, `role`, `debtorId`, `actorRole` (para saber si invitó un cajero), `byEmail`, `byPhone` |
+| `INVITATION_RESENT` | Reenviar | `businessId`, `type`, `emailSent` |
+| `INVITATION_CANCELLED` | Cancelar | `businessId`, `type` |
+| `INVITATION_ACCEPTED` | Aceptar | `businessId`, `type`, `role`, `debtorId`: la ficha que quedó vinculada |
+| `INVITATION_REJECTED` | Rechazar | `businessId`, `type` |
+| `DEBTOR_UNLINKED` | Desvincular (módulo `debtors`) | `businessId`, `previousUserId`, `by` (`BUSINESS` o `CLIENT`) |
+
+**No se registra el vencimiento:** lo hace la tarea diaria, no una persona, y el estado `EXPIRED` queda en la invitación misma.
 
 ## Errores
 
 | Código | Cuándo |
 | --- | --- |
 | 400 | Faltan datos según el tipo (`role`, `debtorId`, correo o teléfono); campos que no aplican al tipo; cliente inactivo; invitación vencida; negocio inactivo al aceptar |
-| 403 | La invitación es para otro correo o teléfono; ruta obsoleta con un negocio distinto al activo |
+| 403 | La invitación es para otro correo o teléfono; un cajero intenta crear, reenviar o cancelar una del equipo; ruta obsoleta con un negocio distinto al activo |
 | 404 | Negocio, cliente o invitación no encontrados; código inválido |
 | 409 | Ya es miembro; cliente ya vinculado; ya es cliente de ese negocio desde otro registro; invitación pendiente duplicada (`INVITATION_ALREADY_PENDING`); invitación ya respondida o cancelada; solo se reenvían pendientes |
 | 429 | Límite de creación o de intentos con código superado |
@@ -190,6 +217,8 @@ Las invitaciones anteriores al rediseño quedan con `createdById` en `null` y pu
 - **Decisión:** la invitación se dirige a un dato de contacto y solo esa persona puede aceptarla. **Por qué:** antes cualquiera con el código podía aceptarla.
 - **Decisión:** `listByBusiness` (obsoleto) compara la ruta con el negocio activo. **Por qué:** antes permitía ver invitaciones de otros negocios.
 - **Decisión:** compartir por WhatsApp con un enlace `wa.me`. **Por qué:** no requiere una integración paga; el negocio lo envía desde su teléfono.
+- **Decisión (2026-11-21):** el cajero puede invitar clientes, pero no al equipo. **Por qué:** es quien registra a los clientes en el mostrador.
+- **Decisión (2026-11-21):** el vínculo se puede deshacer desde el negocio (dueño o administrador) y desde el cliente. **Por qué:** si acepta la persona equivocada no había cómo corregirlo, y el cliente debe poder dejar de ver una tienda.
 
 ### Puntos de la revisión del 2026-11-19
 
@@ -212,4 +241,6 @@ Script contra una base desechable con todas las migraciones aplicadas, en el mis
 - **Clientes:** sin dato de contacto usa el teléfono del cliente; aceptar vincula el registro; un segundo registro del mismo negocio responde 409 y la transacción se revierte; invitar a un cliente ya vinculado responde 409.
 - **Cierre:** rechazar deja `REJECTED`; aceptar una vencida responde 400 y la marca `EXPIRED`; las de un negocio cerrado no aparecen en `incoming`.
 
-**Falta:** la prueba en dispositivo con la app.
+**En la app (2026-11-20):** invitar al equipo; invitar a un cliente con cuenta y con el mismo celular; cliente desde cero (registro con el número invitado); cuenta con otro celular (403 con el código, luego invitación por correo); rechazar y cancelar.
+
+**Falta probar:** el cajero invitando clientes y la desvinculación por los dos lados.

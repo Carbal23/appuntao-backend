@@ -37,16 +37,20 @@ export class InvitationsController {
 
   @Post()
   @UseGuards(BusinessContextGuard, BusinessRoleGuard, InvitationThrottlerGuard)
-  @BusinessRoles('ADMIN', 'OWNER')
+  @BusinessRoles('ADMIN', 'OWNER', 'CASHIER')
   @Throttle({ default: { limit: 30, ttl: 60 * 60 * 1000 } })
   @BusinessProtected()
   @ApiOperation({
     summary: 'Invitar a un empleado o a un cliente',
     description:
-      'Va dirigida a un teléfono o correo. Si la persona ya tiene cuenta con ese dato, la ve en la app; si no, al registrarse con él. Devuelve shareText y whatsappUrl para compartirla. Máximo 30 por hora por negocio.',
+      'Va dirigida a un teléfono o correo. Si la persona ya tiene cuenta con ese dato, la ve en la app; si no, al registrarse con él. Devuelve shareText y whatsappUrl para compartirla. Máximo 30 por hora por negocio. El cajero solo puede invitar clientes (DEBTOR).',
   })
   @ApiResponse({ status: 201, description: 'Invitación creada' })
   @ApiResponse({ status: 400, description: 'Datos incompletos o inválidos' })
+  @ApiResponse({
+    status: 403,
+    description: 'Un cajero intentó invitar al equipo',
+  })
   @ApiResponse({
     status: 409,
     description:
@@ -62,14 +66,18 @@ export class InvitationsController {
 
   @Get()
   @UseGuards(BusinessContextGuard, BusinessRoleGuard)
-  @BusinessRoles('ADMIN', 'OWNER')
+  @BusinessRoles('ADMIN', 'OWNER', 'CASHIER')
   @BusinessProtected()
-  @ApiOperation({ summary: 'Invitaciones del negocio activo (x-business-id)' })
+  @ApiOperation({
+    summary: 'Invitaciones del negocio activo (x-business-id)',
+    description: 'Al cajero solo se le devuelven las de clientes (DEBTOR).',
+  })
   list(
     @CurrentBusiness() businessId: string,
+    @GetUser('id') userId: string,
     @Query() query: ListInvitationsQueryDto,
   ) {
-    return this.invitations.listForBusiness(businessId, query);
+    return this.invitations.listForBusiness(businessId, userId, query);
   }
 
   @Get('business/:businessId')
@@ -83,6 +91,7 @@ export class InvitationsController {
   listByBusiness(
     @Param('businessId') businessId: string,
     @CurrentBusiness() activeBusinessId: string,
+    @GetUser('id') userId: string,
     @Query() query: ListInvitationsQueryDto,
   ) {
     // Los permisos se validan con el negocio del header: si la ruta pide
@@ -92,18 +101,18 @@ export class InvitationsController {
         'El negocio de la ruta no coincide con el negocio activo',
       );
     }
-    return this.invitations.listForBusiness(businessId, query);
+    return this.invitations.listForBusiness(businessId, userId, query);
   }
 
   @Post(':id/resend')
   @UseGuards(BusinessContextGuard, BusinessRoleGuard, InvitationThrottlerGuard)
-  @BusinessRoles('ADMIN', 'OWNER')
+  @BusinessRoles('ADMIN', 'OWNER', 'CASHIER')
   @Throttle({ default: { limit: 30, ttl: 60 * 60 * 1000 } })
   @BusinessProtected()
   @ApiOperation({
     summary: 'Reenviar una invitación pendiente',
     description:
-      'Renueva la vigencia y vuelve a enviar el correo. El código no cambia.',
+      'Renueva la vigencia y vuelve a enviar el correo. El código no cambia. El cajero solo puede reenviar las de clientes.',
   })
   resend(
     @Param('id') id: string,
@@ -115,9 +124,12 @@ export class InvitationsController {
 
   @Delete(':id')
   @UseGuards(BusinessContextGuard, BusinessRoleGuard)
-  @BusinessRoles('ADMIN', 'OWNER')
+  @BusinessRoles('ADMIN', 'OWNER', 'CASHIER')
   @BusinessProtected()
-  @ApiOperation({ summary: 'Cancelar una invitación pendiente' })
+  @ApiOperation({
+    summary: 'Cancelar una invitación pendiente',
+    description: 'El cajero solo puede cancelar las de clientes.',
+  })
   cancel(
     @Param('id') id: string,
     @CurrentBusiness() businessId: string,
