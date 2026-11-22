@@ -70,6 +70,23 @@ const DOCUMENT_PATTERNS: Record<string, { pattern: RegExp; message: string }> =
     },
   };
 
+/**
+ * El error del número de documento según su tipo, o `null` si es válido o si
+ * no hay tipo. Sirve para validar la pareja tipo-número cuando llegan por
+ * separado (por ejemplo, al editar solo uno de los dos).
+ */
+export function documentNumberError(
+  documentType: unknown,
+  documentNumber: unknown,
+): string | null {
+  const rule =
+    typeof documentType === 'string'
+      ? DOCUMENT_PATTERNS[documentType]
+      : undefined;
+  if (!rule || typeof documentNumber !== 'string') return null;
+  return rule.pattern.test(documentNumber) ? null : rule.message;
+}
+
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 

@@ -45,10 +45,11 @@ export class DebtorsController {
     description: 'Deudor creado',
     type: DebtorResponseDto,
   })
+  @ApiResponse({ status: 400, description: 'Error de validación' })
   @ApiResponse({
-    status: 400,
+    status: 409,
     description:
-      'Ya existe un deudor con estos datos en este negocio o Error de validación',
+      'DEBTOR_DUPLICATE: otro deudor activo del negocio tiene el mismo celular o documento. Trae `errors` con el campo y `debtorId` del existente',
   })
   create(
     @CurrentBusiness('businessId') businessId: string,
@@ -85,7 +86,11 @@ export class DebtorsController {
   }
 
   @Get('me/all')
-  @ApiOperation({ summary: 'Listar todos los deudores del usuario' })
+  @ApiOperation({
+    summary: 'Listar los deudores de todos los negocios del usuario',
+    description:
+      'Negocios activos donde el usuario es miembro, con cualquier rol. No requiere x-business-id.',
+  })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'search', required: false })
@@ -185,9 +190,14 @@ export class DebtorsController {
     description: 'Deudor actualizado',
     type: DebtorResponseDto,
   })
+  @ApiResponse({ status: 400, description: 'Error de validación' })
   @ApiResponse({
     status: 404,
-    description: 'Deudor no encontrado',
+    description: 'Deudor no encontrado o inactivo',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'DEBTOR_DUPLICATE: el celular o documento es de otro deudor',
   })
   update(
     @Param('id') id: string,
@@ -222,14 +232,19 @@ export class DebtorsController {
   @BusinessRoles('ADMIN', 'OWNER')
   @UseGuards(BusinessContextGuard)
   @BusinessProtected()
-  @ApiOperation({ summary: 'Inactiva deudor' })
+  @ApiOperation({
+    summary: 'Inactivar deudor',
+    description:
+      'Solo sin saldo pendiente. Suelta la cuenta vinculada y cancela sus invitaciones pendientes. No se puede reactivar.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Deudor inactivo',
     schema: {
-      example: { message: 'Deudor inactivo' },
+      example: { message: 'El deudor quedó inactivo' },
     },
   })
+  @ApiResponse({ status: 400, description: 'Tiene saldo pendiente' })
   @ApiResponse({
     status: 404,
     description: 'Deudor no encontrado',
