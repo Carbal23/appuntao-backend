@@ -159,7 +159,7 @@ sequenceDiagram
 - **Decisión (2026-11-22):** el celular no se repite entre clientes activos de un negocio, igual que el documento. **Por qué:** cada persona tiene su propio celular, y es el dato con el que se le cobra y se le invita.
 - **Decisión (2026-11-22):** inactivar lo hace el tendero (dueño o administrador) desde la app, no un backoffice. **Por qué:** la lista de clientes es de cada tienda, que es la responsable de esos datos. Sirve para fichas duplicadas por error y clientes que ya no compran.
 - **Decisión (2026-11-22):** el negocio solo ve el nombre de la cuenta vinculada. **Por qué:** recibía correo, teléfono, documento y rol global, y la app no los usa.
-- **Pendiente (módulo `debts`):** `POST /debts` no revisa si la ficha está inactiva, así que se le puede crear una deuda a una ficha inactiva, que ya no aparece en ningún listado.
+- **Resuelto en `debts` (2026-11-22):** `POST /debts` ya no deja fiarle a una ficha inactiva (400). Ver [debts.md](debts.md).
 - **Pendiente:** no hay índice único en la base para celular o documento por negocio; dos creaciones exactamente simultáneas podrían pasar las dos. Un índice único parcial (`WHERE "inactivatedAt" IS NULL`) lo cerraría, pero antes hay que revisar si development tiene duplicados.
 
 ### En la app
