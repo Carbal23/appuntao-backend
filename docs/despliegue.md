@@ -36,6 +36,7 @@ Se configuran en **Environment** del servicio. Ver la lista completa en [entorno
 - `DATABASE_URL`: pooler de Supabase en **modo transacción**, puerto **6543**, con `?pgbouncer=true&connection_limit=5`
 - `DIRECT_URL`: pooler en **modo sesión**, puerto **5432**. La usa `migrate deploy`
 - `JWT_SECRET` (mínimo 32 caracteres)
+- `JWT_EXPIRES_IN`: en development `1d`, para que la app renueve menos contra el plan gratuito. **En production, `15m` o `30m`**: un token robado o una sesión cerrada dejan de servir pronto, y la app lo renueva sola sin que el usuario lo note
 - `RESEND_API_KEY` y `EMAIL_FROM` (dominio verificado en Resend)
 - `TRUST_PROXY=1` (Render pone un proxy delante; sin esto, los límites de intentos se aplican a todos los usuarios a la vez)
 

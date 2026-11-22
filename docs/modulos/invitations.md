@@ -243,4 +243,40 @@ Script contra una base desechable con todas las migraciones aplicadas, en el mis
 
 **En la app (2026-11-20):** invitar al equipo; invitar a un cliente con cuenta y con el mismo celular; cliente desde cero (registro con el número invitado); cuenta con otro celular (403 con el código, luego invitación por correo); rechazar y cancelar.
 
-**Falta probar:** el cajero invitando clientes y la desvinculación por los dos lados.
+**En la app (2026-11-21):** el cajero invita, reenvía y cancela invitaciones de clientes y no puede invitar al equipo; el negocio desvincula a un cliente y el cliente deja de ver una tienda.
+
+## Propuesta: vinculación por QR del negocio
+
+> **Estado:** propuesta del equipo, analizada el 2026-11-22. **No entra en el MVP**: se retoma después del lanzamiento, idealmente con la opinión de tenderos reales.
+
+**Idea:** cada negocio tiene un código QR único que imprime y pone en la tienda. El cliente lo escanea y **solicita** la vinculación; el dueño, un administrador o un cajero la aprueba. Es el flujo inverso a la invitación: lo inicia el cliente.
+
+**Qué aporta:** le quita al tendero el trabajo de invitar uno por uno y sirve para conseguir usuarios (el afiche invita a descargar la app).
+
+**Por qué no entra ahora:** el flujo de invitaciones ya resuelve la vinculación, y el tendero casi siempre tiene el celular del cliente porque lo usa para los cobros. Para lanzar faltan otras cosas: despliegue, textos legales definitivos y la página de eliminación de cuenta que exige Google Play.
+
+**Lo difícil no es el QR, es aprobar.** Al llegar una solicitud, el tendero tiene que decidir a qué ficha corresponde: una que ya existe (sugerida por celular o documento), una nueva con los datos del cliente, o ninguna (rechazar). Si esa pantalla se hace mal, se vincula a la persona equivocada.
+
+**Decisiones pendientes:**
+
+- La solicitud nunca vincula sola: el QR impreso lo puede escanear cualquiera, incluso desde una foto.
+- Qué datos comparte el cliente al pedir (nombre, celular, documento) y cómo consiente compartirlos: al aprobar, el tendero pasa a ser responsable de esos datos (Ley 1581).
+- Cómo se entera el tendero: sin notificaciones push, solo al abrir la app.
+- Límites: solicitudes pendientes por cuenta, vencimiento, y regenerar el código si se filtra.
+- Quién aprueba: se propone el mismo grupo que invita clientes (dueño, administrador y cajero).
+- Auditoría: crear, aprobar (con la ficha elegida), rechazar y cancelar.
+
+**Estimado:**
+
+| Parte | Esfuerzo |
+| --- | --- |
+| Backend: código del negocio regenerable, modelo de solicitud, crear, listar, aprobar (vincular o crear ficha), rechazar, cancelar, auditoría, migración y pruebas | 1,5 a 2 días |
+| App: mostrar el QR para imprimir o compartir (`react-native-qrcode-svg`, JS puro; `react-native-svg` ya está instalado) | ½ día |
+| App: escanear con `expo-camera` (nativo, exige build nuevo) y escribir el código a mano como alternativa | 1 día |
+| App: solicitud del cliente con su estado, y bandeja del tendero con la pantalla de aprobar | 1,5 a 2 días |
+| Abrir la app desde la cámara del teléfono (enlaces universales en `appuntao.com`; si no está instalada, a la tienda) | Después de publicar en las tiendas |
+
+Unos 5 días para la versión que se escanea desde la app, más pruebas.
+
+**Alternativa casi gratis:** un QR que abra WhatsApp con el tendero y un mensaje listo ("quiero ver mi cuenta en Appuntao, mi número es…"), y el tendero invita con el flujo actual. No toca la vinculación, pero exige guardar el teléfono del negocio, que hoy no existe en `Business`.
+

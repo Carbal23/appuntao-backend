@@ -4,7 +4,7 @@
 
 ## Propósito
 
-Registro y gestión de las cuentas de usuario: crear la cuenta con su aceptación legal, consultar y editar los datos, cambiar la contraseña, buscar a una persona para agregarla a un negocio y armar el dashboard con los negocios del usuario.
+Registro y gestión de las cuentas de usuario: crear la cuenta con su aceptación legal, consultar y editar los datos, cambiar la contraseña y armar el dashboard con los negocios del usuario.
 
 ## Alcance
 
@@ -12,7 +12,6 @@ Registro y gestión de las cuentas de usuario: crear la cuenta con su aceptació
 - Registro público con validación y normalización de datos, y registro de las aceptaciones legales en la misma transacción.
 - Consulta y edición del propio usuario. Un `ADMIN` de plataforma puede ver y editar a cualquiera.
 - Cambio de contraseña, que cierra todas las sesiones.
-- Búsqueda exacta de un usuario por correo, teléfono o documento (`lookup`).
 - Dashboard: negocios propios, negocios donde trabaja y negocios donde es cliente.
 - Expone las rutas de ciclo de vida de la cuenta (`/users/me/deactivate`, `/users/me/deletion`, `/users/:id/inactivate`...). La lógica está en `account-lifecycle` ([account-lifecycle.md](account-lifecycle.md)).
 
@@ -20,6 +19,7 @@ Registro y gestión de las cuentas de usuario: crear la cuenta con su aceptació
 - Login ni sesiones: [`auth`](auth.md).
 - Publicar o aceptar documentos legales después del registro: [`legal`](legal.md).
 - Recuperar la contraseña olvidada: todavía no existe.
+- Buscar a otras personas por su correo, teléfono o documento: se quitó (ver [Decisiones](#decisiones-y-pendientes)). Para sumar a alguien a un negocio se usa [`invitations`](invitations.md).
 
 ## Modelos
 
@@ -43,7 +43,7 @@ Registro y gestión de las cuentas de usuario: crear la cuenta con su aceptació
 | `password` | Mínimo 8 caracteres y máximo 72 bytes, con al menos una letra y un número | Hash bcrypt |
 | `role` | El registro siempre crea `USER`. Solo un `ADMIN` puede cambiarlo | `USER` o `ADMIN` |
 
-La normalización hace que el mismo correo o teléfono no quede registrado dos veces con distinta escritura, y que el login y el `lookup` los encuentren se escriban como se escriban.
+La normalización hace que el mismo correo o teléfono no quede registrado dos veces con distinta escritura, y que el login los encuentre se escriban como se escriban.
 
 Correo y teléfono son obligatorios porque son los datos con los que la persona inicia sesión, la encuentran para agregarla a un negocio y le llegan las invitaciones. En la base siguen siendo columnas opcionales, porque la anonimización de una cuenta los borra. Si falta uno, la API responde un solo mensaje por campo (`"El correo electrónico es obligatorio"`, `"El teléfono es obligatorio"`).
 
@@ -57,7 +57,6 @@ Las respuestas nunca incluyen la contraseña ni los campos de estado interno: se
 | --- | --- | --- | --- |
 | `POST` | `/api/users` | Público. 10 por hora por IP | Registrar un usuario |
 | `GET` | `/api/users` | `ADMIN` | Listar usuarios activos |
-| `GET` | `/api/users/lookup?identifier=` | Autenticado. 30 por minuto | Buscar un usuario por dato exacto. Devuelve solo `id`, `firstName`, `lastName` |
 | `GET` | `/api/users/:id` | El propio usuario o `ADMIN` | Ver un usuario |
 | `PATCH` | `/api/users/:id` | El propio usuario (solo nombres) o `ADMIN` (todo) | Editar un usuario |
 | `PATCH` | `/api/users/me/password` | Autenticado | Cambiar la contraseña |
@@ -96,10 +95,6 @@ Las respuestas nunca incluyen la contraseña ni los campos de estado interno: se
 
 El access token en uso sigue funcionando hasta que venza. Después, el usuario debe volver a iniciar sesión.
 
-### Lookup
-
-Pensado para agregar a una persona a un negocio sin exponer la lista de usuarios. Busca solo usuarios activos y no anonimizados, por coincidencia exacta (después de normalizar). Si el dato corresponde a más de una cuenta, responde 409 y pide buscar con otro dato.
-
 ### Dashboard
 
 | Lista | Qué incluye |
@@ -111,7 +106,6 @@ Pensado para agregar a una persona a un negocio sin exponer la lista de usuarios
 ## Permisos y seguridad
 
 - El registro tiene límite por IP (10 por hora) para evitar la creación masiva de cuentas y usar el registro para averiguar qué datos están registrados.
-- `lookup` tiene límite de 30 por minuto y devuelve solo el nombre.
 - Detrás de un proxy hace falta `TRUST_PROXY=1` para que los límites usen la IP real (ver [auth.md](auth.md#permisos-y-seguridad)).
 
 ## Integraciones
@@ -129,9 +123,8 @@ Pensado para agregar a una persona a un negocio sin exponer la lista de usuarios
 | --- | --- |
 | 400 | Datos inválidos; correo, teléfono o documento ya registrados; contraseña actual incorrecta |
 | 403 | Ver o editar a otro usuario sin ser `ADMIN`; editar campos reservados al `ADMIN` |
-| 404 | Usuario no encontrado; `lookup` sin resultados |
-| 409 | `lookup` con un dato que corresponde a más de una cuenta |
-| 429 | Límite de registro o de `lookup` superado |
+| 404 | Usuario no encontrado |
+| 429 | Límite de registro superado |
 | 503 | Registro sin documentos legales vigentes publicados |
 
 ## Decisiones y pendientes
@@ -140,6 +133,7 @@ Pensado para agregar a una persona a un negocio sin exponer la lista de usuarios
 - **Decisión:** el registro no acepta `role` y siempre crea `USER`. **Por qué:** el DTO anterior aceptaba `role` aunque el servicio lo ignoraba; ahora el contrato de la API refleja lo que de verdad pasa.
 - **Decisión:** correo y teléfono obligatorios en el registro. **Por qué:** sin ellos la cuenta no podía recibir ni aceptar invitaciones, y la validación de duplicados fallaba (ver el siguiente punto).
 - **Corregido:** la búsqueda del usuario existente en el registro armaba `OR: [{ email: data.email ?? undefined }, ...]`. Prisma interpreta `{ email: undefined }` como `{}`, que coincide con **cualquier** usuario, así que un registro sin correo podía fallar con un falso "ya existe una cuenta... pero está desactivada". Ahora el `OR` solo incluye los datos que llegan.
-- **Pendiente:** las cuentas creadas antes de esta regla pueden no tener correo o teléfono. Revisar cuántas hay en development y decidir si se les pide completarlos (por ejemplo, desde la app al iniciar sesión).
+- **Revisado (2026-11-22):** en development las 7 cuentas activas tienen correo y teléfono, y todos los teléfonos están normalizados. No hace falta pedirles que los completen. Hay que repetir la consulta en production antes de desplegar ahí.
+- **Decisión (2026-11-22):** se eliminó `GET /users/lookup`. **Por qué:** servía para agregar miembros a mano, que ahora se hace por invitación, y la app ya no lo usaba. Dejaba que cualquier usuario con sesión escribiera un celular o un documento y supiera a nombre de quién está: una filtración de datos personales sin uso.
 - **Pendiente:** recuperación de contraseña.
 - **Pendiente:** verificación de correo y teléfono.

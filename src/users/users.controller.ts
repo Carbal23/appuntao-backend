@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  Patch,
-  Query,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -22,10 +14,6 @@ import { UserResponseDto } from './dto/user-response.dto';
 import type { UserSafe } from './user.select';
 import { ApiAuth } from 'src/common/swagger/auth.decorator';
 import { UserDashboardDto } from './dto/user-dashboard.dto';
-import {
-  UserLookupQueryDto,
-  UserLookupResponseDto,
-} from './dto/user-lookup.dto';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { AccountLifecycleService } from 'src/account-lifecycle/account-lifecycle.service';
@@ -75,29 +63,6 @@ export class UsersController {
   @ApiResponse({ status: 403, description: 'No es administrador' })
   findAll() {
     return this.usersService.findAll();
-  }
-
-  // Va antes de GET :id: si no, Express tomaría "lookup" como un id.
-  @UseGuards(JwtAuthGuard, ThrottlerGuard)
-  @Throttle({ default: { limit: 30, ttl: 60 * 1000 } })
-  @ApiAuth()
-  @Get('lookup')
-  @ApiOperation({
-    summary: 'Buscar un usuario por su correo, teléfono o documento exacto',
-    description:
-      'Para agregarlo como miembro de un negocio. Devuelve solo id, nombre y apellido.',
-  })
-  @ApiResponse({ status: 200, type: UserLookupResponseDto })
-  @ApiResponse({
-    status: 404,
-    description: 'No hay un usuario activo con ese dato',
-  })
-  @ApiResponse({
-    status: 409,
-    description: 'El dato corresponde a más de una cuenta',
-  })
-  lookup(@Query() query: UserLookupQueryDto) {
-    return this.usersService.lookup(query.identifier);
   }
 
   @UseGuards(JwtAuthGuard)

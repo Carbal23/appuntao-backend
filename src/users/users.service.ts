@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -12,8 +11,6 @@ import * as bcrypt from 'bcrypt';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserSafe, userSafeSelect } from './user.select';
 import { UserDashboardDto } from './dto/user-dashboard.dto';
-import { UserLookupResponseDto } from './dto/user-lookup.dto';
-import { userIdentifierConditions } from 'src/common/validation/user-identifier';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { AuthLogService } from 'src/auth-log/auth-log.service';
 import { LegalService } from 'src/legal/legal.service';
@@ -144,35 +141,6 @@ export class UsersService {
     if (!user) throw new NotFoundException('User not found');
 
     return user;
-  }
-
-  /**
-   * Busca un usuario activo por el dato exacto (correo, teléfono o
-   * documento) y devuelve solo su nombre, para agregarlo a un negocio sin
-   * exponer los datos de todos los usuarios.
-   */
-  async lookup(identifier: string): Promise<UserLookupResponseDto> {
-    const users = await this.prisma.user.findMany({
-      where: {
-        inactivatedAt: null,
-        anonymizedAt: null,
-        OR: userIdentifierConditions(identifier),
-      },
-      select: { id: true, firstName: true, lastName: true },
-      take: 2,
-    });
-
-    if (!users.length) {
-      throw new NotFoundException(
-        'No encontramos un usuario activo con ese correo, teléfono o documento',
-      );
-    }
-    if (users.length > 1) {
-      throw new ConflictException(
-        'Ese dato corresponde a más de una cuenta. Búscalo con otro dato.',
-      );
-    }
-    return users[0];
   }
 
   async update(

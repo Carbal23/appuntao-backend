@@ -30,6 +30,14 @@ import type { Device } from './interfaces/device.interface';
  */
 const REFRESH_REUSE_GRACE_MS = 30_000;
 
+/**
+ * Hash bcrypt de una contraseña cualquiera, con el mismo costo que las reales.
+ * Si el identificador no corresponde a ninguna cuenta se compara contra este,
+ * para que el login tarde lo mismo exista o no la cuenta: si no, el tiempo de
+ * respuesta delataba qué correos, teléfonos o documentos están registrados.
+ */
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('appuntao-sin-cuenta', 10);
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -52,6 +60,10 @@ export class AuthService {
       },
       take: 2,
     });
+
+    if (!candidates.length) {
+      await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+    }
 
     const matches: User[] = [];
     for (const candidate of candidates) {

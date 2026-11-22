@@ -76,7 +76,7 @@ Los guards se aplican **por controller o por ruta** con `@UseGuards`. No hay gua
 | `BusinessContextGuard` | Exige el negocio activo, verifica que exista, que no esté inactivado y que el usuario sea miembro. Deja `request.business` |
 | `BusinessRoleGuard` + `@BusinessRoles(...)` | Restringe por **rol dentro del negocio** (`BusinessUser.role`). Sin `@BusinessRoles`, deja pasar |
 | `LoginThrottlerGuard` | Limita intentos de login por IP + identificador y registra el bloqueo en `auth-log` |
-| `ThrottlerGuard` + `@Throttle(...)` | Límite de peticiones por IP en rutas sensibles (registro, lookup, códigos de invitación). Los contadores viven en memoria de cada instancia |
+| `ThrottlerGuard` + `@Throttle(...)` | Límite de peticiones por IP en rutas sensibles (registro, códigos de invitación). Los contadores viven en memoria de cada instancia |
 
 `JwtStrategy` busca al usuario en la base en cada petición: si está inactivado responde 401, aunque el token no haya vencido. Detalle en [modulos/auth.md](modulos/auth.md).
 

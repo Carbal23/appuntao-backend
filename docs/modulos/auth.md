@@ -121,7 +121,8 @@ Los access tokens ya emitidos siguen siendo válidos hasta que venzan; el logout
 ## Permisos y seguridad
 
 - Contraseñas con **bcrypt** (10 rondas). Los refresh tokens nunca se guardan en claro.
-- **Límite de login:** 5 intentos por minuto por combinación IP + identificador. Al bloquear se registra un único `LOGIN_BLOCKED` por ventana de bloqueo.
+- **Límite de login:** 5 intentos por minuto por combinación IP + identificador. El identificador se normaliza antes de contar (`normalizeLoginIdentifier`): `300 123 4567`, `+57 3001234567` y `300-123-4567` son el mismo contador, igual que un correo en mayúsculas o un documento con puntos. Sin eso, el límite se esquivaba cambiando cómo se escribía el dato. Al bloquear se registra un único `LOGIN_BLOCKED` por ventana de bloqueo.
+- **Mismo tiempo de respuesta exista o no la cuenta.** Si el identificador no corresponde a nadie, se compara la contraseña contra un hash de relleno con el mismo costo. Antes esa respuesta era más rápida y delataba qué correos, teléfonos o documentos están registrados.
 - El contador del límite vive **en memoria** de cada instancia: se reinicia al reiniciar el servidor y no se comparte entre instancias.
 - Detrás de un proxy (Render) hay que definir `TRUST_PROXY=1`. Sin eso, todas las peticiones parecen venir de la IP del proxy y el límite se aplica a todos los usuarios a la vez.
 - `JWT_SECRET` debe tener al menos 32 caracteres o la aplicación no arranca.
@@ -160,4 +161,6 @@ Los access tokens ya emitidos siguen siendo válidos hasta que venzan; el logout
 - **Decisión:** margen de 30 s para la reutilización. **Por qué:** sin él, dos refresh simultáneos del mismo cliente cerraban la sesión como si fuera un robo.
 - **Decisión:** el estado de la cuenta se informa solo con la contraseña correcta. **Por qué:** no revelar si una cuenta existe o está desactivada.
 - **Pendiente:** recuperación de contraseña.
+- **Pendiente:** el límite es por IP + identificador; no hay bloqueo por cuenta. Alguien con muchas IP podría probar contraseñas de una misma cuenta. Para el MVP se acepta.
+- **Decisión (2026-11-22):** `JWT_EXPIRES_IN` es `1d` en development, a propósito: el backend corre en el plan gratuito de Render y así la app hace menos renovaciones. **En production debe ser de 15 a 30 minutos** (`15m` o `30m`), para que un token robado, una sesión cerrada o una contraseña cambiada dejen de servir pronto. Revisarlo al configurar el entorno de production (ver [despliegue.md](../despliegue.md)).
 - **Pendiente:** si se despliegan varias instancias, mover el almacenamiento del límite de login a un store compartido (por ejemplo Redis).

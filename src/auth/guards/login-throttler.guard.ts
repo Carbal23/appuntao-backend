@@ -12,6 +12,7 @@ import type { Request } from 'express';
 import { AuthLogEvent } from '@prisma/client';
 import { AuthLogService } from 'src/auth-log/auth-log.service';
 import { requestContextFrom } from 'src/common/decorators/request-context.decorator';
+import { normalizeLoginIdentifier } from 'src/common/validation/user-identifier';
 
 type LoginBody =
   | { identifier?: unknown; deviceId?: unknown; deviceName?: unknown }
@@ -32,9 +33,11 @@ export class LoginThrottlerGuard extends ThrottlerGuard {
 
   protected getTracker(req: Record<string, any>): Promise<string> {
     const body = req.body as LoginBody;
+    // Normalizado: si no, cada forma de escribir el mismo dato tendría su
+    // propio contador y el límite se esquivaría con espacios o con +57.
     const identifier =
       typeof body?.identifier === 'string'
-        ? body.identifier.trim().toLowerCase()
+        ? normalizeLoginIdentifier(body.identifier)
         : '';
     const ip = req.ip as string | undefined;
 
