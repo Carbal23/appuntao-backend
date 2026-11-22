@@ -1,56 +1,57 @@
-import {
-  ArrayNotEmpty,
-  IsArray,
-  IsEmail,
-  IsEnum,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  IsUUID,
-  MinLength,
-} from 'class-validator';
-import { Role, DocumentType } from '@prisma/client';
+import { ArrayNotEmpty, IsArray, IsEnum, IsUUID } from 'class-validator';
+import { DocumentType } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsDocumentNumber,
+  IsPersonName,
+  IsRequiredColombianPhone,
+  IsRequiredEmail,
+  IsStrongPassword,
+} from 'src/common/validation/contact.validators';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'Juan' })
-  @IsNotEmpty()
-  @IsString()
+  @IsPersonName()
   firstName!: string;
 
   @ApiProperty({ example: 'Pérez' })
-  @IsNotEmpty()
-  @IsString()
+  @IsPersonName()
   lastName!: string;
 
   @ApiProperty({ enum: DocumentType, example: DocumentType.CC })
   @IsEnum(DocumentType)
   documentType!: DocumentType;
 
-  @ApiProperty({ example: '1032876361' })
-  @IsNotEmpty()
-  @IsString()
+  @ApiProperty({
+    example: '1032876361',
+    description:
+      'CC: 6 a 10 dígitos; NIT: 9 dígitos, o 10 con el de verificación; extranjería: 3 a 20 letras o números. Se aceptan puntos, espacios y guiones, que se eliminan.',
+  })
+  @IsDocumentNumber()
   documentNumber!: string;
 
-  @ApiProperty({ example: 'correo@email.com', required: false })
-  @IsOptional()
-  @IsEmail()
-  email?: string;
+  @ApiProperty({
+    example: 'correo@email.com',
+    description: 'Obligatorio. Se guarda en minúsculas',
+  })
+  @IsRequiredEmail()
+  email!: string;
 
-  @ApiProperty({ example: '3001234567', required: false })
-  @IsOptional()
-  @IsString()
-  phone?: string;
+  @ApiProperty({
+    example: '3001234567',
+    description:
+      'Obligatorio. Celular o fijo de Colombia. Se acepta con espacios o con +57; se guarda con 10 dígitos.',
+  })
+  @IsRequiredColombianPhone()
+  phone!: string;
 
-  @ApiProperty({ example: 'password123', minLength: 6 })
-  @IsNotEmpty()
-  @MinLength(6)
+  @ApiProperty({
+    example: 'Clave2026',
+    minLength: 8,
+    description: 'Mínimo 8 caracteres, con al menos una letra y un número',
+  })
+  @IsStrongPassword()
   password!: string;
-
-  @ApiProperty({ enum: Role, example: Role.USER, required: false })
-  @IsOptional()
-  @IsEnum(Role)
-  role?: Role;
 
   @ApiProperty({
     type: [String],

@@ -26,8 +26,10 @@ import { AccountLifecycleModule } from 'src/account-lifecycle/account-lifecycle.
     }),
     ThrottlerModule.forRoot({
       throttlers: [{ ttl: 60_000, limit: 5 }],
-      errorMessage:
-        'Demasiados intentos de inicio de sesión. Intenta de nuevo en un minuto.',
+      errorMessage: (context) =>
+        context.getHandler().name === 'login'
+          ? 'Demasiados intentos de inicio de sesión. Intenta de nuevo en un minuto.'
+          : 'Demasiadas solicitudes. Intenta de nuevo más tarde.',
     }),
     UsersModule,
     PrismaModule,

@@ -72,6 +72,8 @@ src/
 ├── config/        configuración tipada (app, database, jwt)
 ├── prisma/        PrismaService
 └── providers/     integraciones externas (email)
+scripts/           scripts de operación (publicar documentos legales)
+legal/             textos de los documentos legales, una carpeta por tipo
 docs/              documentación del proyecto
 ```
 

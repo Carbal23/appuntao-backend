@@ -6,6 +6,8 @@
 
 Gestionar qué pasa con una cuenta y con sus negocios cuando el usuario se va, se toma una pausa o le pasa el negocio a otra persona. Cumple el derecho de supresión de la **Ley 1581 de 2012** y lo que exigen App Store y Google Play: toda app que permite crear cuentas debe permitir eliminarlas.
 
+Las rutas de la cuenta propia se exponen desde [`users`](users.md#endpoints) y la reactivación desde el login está en [`auth`](auth.md#login).
+
 ## Alcance
 
 **Hace:**

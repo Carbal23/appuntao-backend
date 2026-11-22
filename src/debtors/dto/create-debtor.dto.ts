@@ -1,16 +1,34 @@
-import { IsNotEmpty, IsOptional, IsString, IsEnum } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsEnum,
+  MaxLength,
+} from 'class-validator';
+import { Transform } from 'class-transformer';
 import { DocumentType } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsColombianPhone,
+  IsDocumentNumber,
+} from 'src/common/validation/contact.validators';
 
 export class CreateDebtorDto {
   @ApiProperty({ example: 'Pedro Perez' })
-  @IsNotEmpty()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
   name!: string;
 
-  @ApiProperty({ example: '+573008923910' })
+  @ApiProperty({
+    example: '3008923910',
+    description: 'Celular o fijo de Colombia; se guarda con 10 dígitos',
+  })
   @IsOptional()
-  @IsString()
+  @IsColombianPhone()
   phone?: string;
 
   @ApiProperty({ example: 'CC' })
@@ -18,9 +36,12 @@ export class CreateDebtorDto {
   @IsEnum(DocumentType)
   documentType?: DocumentType;
 
-  @ApiProperty({ example: '9129384' })
+  @ApiProperty({
+    example: '9129384',
+    description: 'Si viene documentType, se valida con sus reglas',
+  })
   @IsOptional()
-  @IsString()
+  @IsDocumentNumber()
   documentNumber?: string;
 
   @ApiProperty({ example: 'Cliente nuevo' })

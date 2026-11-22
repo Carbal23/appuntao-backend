@@ -14,6 +14,7 @@ import { createHash, randomBytes, randomUUID } from 'crypto';
 import type { IJwtPayload } from './interfaces/jwt-payload.interface';
 import { UserSafe, userSafeSelect } from 'src/users/user.select';
 import { serializeUser } from 'src/users/helpers/user.serializer';
+import { userIdentifierConditions } from 'src/common/validation/user-identifier';
 import { AuthLogService } from 'src/auth-log/auth-log.service';
 import { LegalService } from 'src/legal/legal.service';
 import { AccountLifecycleService } from 'src/account-lifecycle/account-lifecycle.service';
@@ -28,6 +29,14 @@ import type { Device } from './interfaces/device.interface';
  * cerrar la sesión. Pasado este margen, la reutilización cierra la sesión.
  */
 const REFRESH_REUSE_GRACE_MS = 30_000;
+
+/**
+ * Hash bcrypt de una contraseña cualquiera, con el mismo costo que las reales.
+ * Si el identificador no corresponde a ninguna cuenta se compara contra este,
+ * para que el login tarde lo mismo exista o no la cuenta: si no, el tiempo de
+ * respuesta delataba qué correos, teléfonos o documentos están registrados.
+ */
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('appuntao-sin-cuenta', 10);
 
 @Injectable()
 export class AuthService {
@@ -46,15 +55,15 @@ export class AuthService {
   ): Promise<CredentialsCheck> {
     const candidates = await this.prisma.user.findMany({
       where: {
-        OR: [
-          { email: identifier },
-          { phone: identifier },
-          { documentNumber: identifier },
-        ],
+        OR: userIdentifierConditions(identifier),
         anonymizedAt: null,
       },
       take: 2,
     });
+
+    if (!candidates.length) {
+      await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+    }
 
     const matches: User[] = [];
     for (const candidate of candidates) {
@@ -241,7 +250,7 @@ export class AuthService {
     });
 
     return {
-      user: serializeUser(user) as UserSafe,
+      user: serializeUser(user),
       accessToken,
       accessTokenExpiresIn: this.accessTokenExpiresIn,
       refreshToken,
@@ -298,7 +307,7 @@ export class AuthService {
     });
 
     return {
-      user: serializeUser(user) as UserSafe,
+      user: serializeUser(user),
       accessToken: await this.signAccessToken(user),
       accessTokenExpiresIn: this.accessTokenExpiresIn,
       refreshToken: next.refreshToken,

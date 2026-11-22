@@ -1,6 +1,7 @@
 import {
   Injectable,
   BadRequestException,
+  ConflictException,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -8,6 +9,7 @@ import { CreateDebtorDto } from './dto/create-debtor.dto';
 import { UpdateDebtorDto } from './dto/update-debtor.dto';
 import { DebtStatus, Debtor, Prisma } from '@prisma/client';
 import { userSafeSelect } from 'src/users/user.select';
+import { debtSelect } from 'src/debts/debt.select';
 import { AuditService } from 'src/audit/audit.service';
 import { AuditAction } from 'src/audit/audit.types';
 import { DebtorQueryDto } from './dto/debtor-query.dto';
@@ -27,16 +29,6 @@ export class DebtorsService {
     currentUserId: string,
     data: CreateDebtorDto,
   ): Promise<Debtor> {
-    // Buscar si ya existe un user con los datos del deudor
-    const existingUser = await this.prisma.user.findFirst({
-      where: {
-        OR: [
-          { documentNumber: data.documentNumber ?? undefined },
-          { phone: data.phone ?? undefined },
-        ],
-      },
-    });
-
     // Validar duplicado dentro del mismo negocio
     const existingDebtor = await this.prisma.debtor.findFirst({
       where: {
@@ -55,10 +47,12 @@ export class DebtorsService {
     }
 
     const debtor = await this.prisma.debtor.create({
+      // No se vincula a ningún usuario por coincidencia de teléfono o
+      // documento: el vínculo solo se crea cuando el cliente acepta una
+      // invitación del negocio (POST /invitations/accept).
       data: {
         ...data,
         businessId,
-        userId: existingUser?.id ?? null,
       },
     });
 
@@ -205,6 +199,35 @@ export class DebtorsService {
       debtorsClear: totalDebtors - debtorsWithDebt,
       topDebtors,
     };
+  }
+
+  /**
+   * Las deudas de una ficha vinculada a la cuenta del usuario (modo cliente).
+   *
+   * Solo responde si la ficha es suya (`Debtor.userId`), está activa y su
+   * negocio también. No exige ser miembro del negocio: el cliente no lo es.
+   * Si la ficha no es suya responde 404, para no revelar que existe.
+   *
+   * Devuelve todas las deudas con sus pagos, sin paginar: la app suma el
+   * saldo con ellas y una página de 10 lo dejaba incompleto.
+   */
+  async findMyDebts(userId: string, debtorId: string) {
+    const debtor = await this.prisma.debtor.findFirst({
+      where: {
+        id: debtorId,
+        userId,
+        inactivatedAt: null,
+        business: { inactivatedAt: null },
+      },
+      select: { id: true, businessId: true },
+    });
+    if (!debtor) throw new NotFoundException('Cuenta no encontrada');
+
+    return this.prisma.debt.findMany({
+      where: { debtorId: debtor.id, businessId: debtor.businessId },
+      select: debtSelect,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async findAllByUser(userId: string, query: DebtorQueryDto) {
@@ -394,5 +417,71 @@ export class DebtorsService {
     });
 
     return { message: 'Deudor quedo inactivo correctamente' };
+  }
+
+  /**
+   * El negocio desvincula la ficha de la cuenta que la veía (por ejemplo, si
+   * aceptó la persona equivocada). La cuenta deja de ver la tienda en el modo
+   * cliente; la ficha, sus deudas y sus pagos siguen iguales. Para volver a
+   * vincularla hay que invitar de nuevo.
+   */
+  async unlinkByBusiness(id: string, businessId: string, actorId: string) {
+    const debtor = await this.prisma.debtor.findFirst({
+      where: { id, businessId },
+      select: { id: true, userId: true },
+    });
+    if (!debtor) throw new NotFoundException('Deudor no encontrado');
+    if (!debtor.userId) {
+      throw new ConflictException(
+        'Este cliente no está vinculado a ninguna cuenta',
+      );
+    }
+
+    await this.prisma.debtor.update({
+      where: { id },
+      data: { userId: null },
+    });
+
+    await this.auditService.log({
+      userId: actorId,
+      action: AuditAction.DEBTOR_UNLINKED,
+      entity: 'Debtor',
+      entityId: id,
+      meta: { businessId, previousUserId: debtor.userId, by: 'BUSINESS' },
+    });
+
+    return { message: 'Cliente desvinculado: ya no ve su cuenta en la app' };
+  }
+
+  /**
+   * El cliente deja de ver una tienda en el modo cliente. Es su decisión: la
+   * tienda conserva la ficha y sus deudas, y puede invitarlo de nuevo.
+   * Responde 404 si la ficha no está ligada a su cuenta.
+   */
+  async unlinkByClient(userId: string, debtorId: string) {
+    const debtor = await this.prisma.debtor.findFirst({
+      where: { id: debtorId, userId },
+      select: { id: true, businessId: true },
+    });
+    if (!debtor) throw new NotFoundException('Cuenta no encontrada');
+
+    await this.prisma.debtor.update({
+      where: { id: debtor.id },
+      data: { userId: null },
+    });
+
+    await this.auditService.log({
+      userId,
+      action: AuditAction.DEBTOR_UNLINKED,
+      entity: 'Debtor',
+      entityId: debtor.id,
+      meta: {
+        businessId: debtor.businessId,
+        previousUserId: userId,
+        by: 'CLIENT',
+      },
+    });
+
+    return { message: 'Ya no verás esta tienda en tu cuenta' };
   }
 }

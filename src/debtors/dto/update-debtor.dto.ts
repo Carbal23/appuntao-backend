@@ -7,7 +7,7 @@ export class UpdateDebtorDto extends PartialType(CreateDebtorDto) {
   @ApiPropertyOptional({ example: 'Pedro Perez', required: false })
   name?: string;
 
-  @ApiPropertyOptional({ example: '+573008923910', required: false })
+  @ApiPropertyOptional({ example: '3008923910', required: false })
   phone?: string;
 
   @ApiPropertyOptional({ example: 'CC', required: false })

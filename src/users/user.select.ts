@@ -13,12 +13,6 @@ export const userSafeSelect = {
   updatedAt: true,
 } satisfies Prisma.UserSelect;
 
-export const userFullSelect = {
-  ...userSafeSelect,
-  updatedAt: true,
-  inactivatedAt: true,
-};
-
 export type UserSafe = {
   [K in keyof typeof userSafeSelect]: User[K];
 };

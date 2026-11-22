@@ -10,6 +10,7 @@ import {
   AuthLogEvent,
   DebtStatus,
   InactivationSource,
+  InvitationStatus,
   OwnershipTransferStatus,
   User,
 } from '@prisma/client';
@@ -397,6 +398,11 @@ export class AccountLifecycleService {
         },
         data: { status: OwnershipTransferStatus.EXPIRED, respondedAt: now },
       });
+    const { count: invitationsExpired } =
+      await this.prisma.invitation.updateMany({
+        where: { status: InvitationStatus.PENDING, expiresAt: { lte: now } },
+        data: { status: InvitationStatus.EXPIRED, respondedAt: now },
+      });
 
     const businessRetentionLimit = new Date(now);
     businessRetentionLimit.setUTCMonth(
@@ -422,12 +428,13 @@ export class AccountLifecycleService {
     }
 
     this.logger.log(
-      `Mantenimiento de cuentas: ${deletionsProcessed} eliminaciones, ${inactiveAnonymized} cuentas inactivas anonimizadas, ${transfersExpired} transferencias vencidas, ${businessesPurged} negocios eliminados`,
+      `Mantenimiento de cuentas: ${deletionsProcessed} eliminaciones, ${inactiveAnonymized} cuentas inactivas anonimizadas, ${transfersExpired} transferencias vencidas, ${invitationsExpired} invitaciones vencidas, ${businessesPurged} negocios eliminados`,
     );
     return {
       deletionsProcessed,
       inactiveAnonymized,
       transfersExpired,
+      invitationsExpired,
       businessesPurged,
     };
   }

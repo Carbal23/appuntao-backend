@@ -15,6 +15,13 @@ export class BusinessSummaryDto {
 
   @ApiProperty({ required: false })
   createdAt?: Date;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description: 'Solo en ownedBusinesses: fecha en que se inactivó',
+  })
+  inactivatedAt?: Date | null;
 }
 
 export class WorkingBusinessDto {

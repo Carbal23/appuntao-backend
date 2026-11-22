@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Patch,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -104,6 +105,42 @@ export class DebtorsController {
     return this.debtorsService.findAllByUser(userId, query);
   }
 
+  @Get('me/:debtorId/debts')
+  @ApiOperation({
+    summary: 'Deudas de una cuenta vinculada (modo cliente)',
+    description:
+      'Solo si la ficha de cliente está vinculada a la cuenta del usuario. No requiere x-business-id ni ser miembro del negocio. Devuelve todas las deudas con sus pagos, sin paginar.',
+  })
+  @ApiResponse({ status: 200, description: 'Deudas con sus pagos' })
+  @ApiResponse({
+    status: 404,
+    description: 'La ficha no existe, no es del usuario o está inactiva',
+  })
+  findMyDebts(
+    @GetUser('id') userId: string,
+    @Param('debtorId') debtorId: string,
+  ) {
+    return this.debtorsService.findMyDebts(userId, debtorId);
+  }
+
+  @Delete('me/:debtorId/link')
+  @ApiOperation({
+    summary: 'Dejar de ver una tienda (modo cliente)',
+    description:
+      'Desvincula la ficha de la cuenta del usuario. La tienda conserva la ficha y sus deudas, y puede volver a invitarlo.',
+  })
+  @ApiResponse({ status: 200, description: 'Desvinculado' })
+  @ApiResponse({
+    status: 404,
+    description: 'La ficha no está ligada a su cuenta',
+  })
+  unlinkMine(
+    @GetUser('id') userId: string,
+    @Param('debtorId') debtorId: string,
+  ) {
+    return this.debtorsService.unlinkByClient(userId, debtorId);
+  }
+
   @Get('summary')
   @UseGuards(BusinessContextGuard)
   @BusinessProtected()
@@ -159,6 +196,26 @@ export class DebtorsController {
     @Body() data: UpdateDebtorDto,
   ) {
     return this.debtorsService.update(id, businessId, currentUserId, data);
+  }
+
+  @Patch(':id/unlink')
+  @BusinessRoles('ADMIN', 'OWNER')
+  @UseGuards(BusinessContextGuard)
+  @BusinessProtected()
+  @ApiOperation({
+    summary: 'Desvincular el cliente de la cuenta que lo ve',
+    description:
+      'La cuenta deja de ver la tienda en el modo cliente. La ficha, sus deudas y sus pagos no cambian. Para volver a vincularla hay que invitar de nuevo.',
+  })
+  @ApiResponse({ status: 200, description: 'Cliente desvinculado' })
+  @ApiResponse({ status: 404, description: 'Deudor no encontrado' })
+  @ApiResponse({ status: 409, description: 'No estaba vinculado' })
+  unlink(
+    @Param('id') id: string,
+    @CurrentBusiness('businessId') businessId: string,
+    @GetUser('id') currentUserId: string,
+  ) {
+    return this.debtorsService.unlinkByBusiness(id, businessId, currentUserId);
   }
 
   @Patch(':id/inactivate')

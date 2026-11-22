@@ -1,15 +1,8 @@
 import { User } from '@prisma/client';
-import { userSafeSelect } from '../user.select';
+import { UserSafe, userSafeSelect } from '../user.select';
 
-export function serializeUser(user: User | null) {
-  if (!user) return null;
-
-  const safeUser: Partial<User> = {};
-
-  for (const key of Object.keys(userSafeSelect)) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    safeUser[key] = user[key];
-  }
-
-  return safeUser as Pick<User, keyof typeof userSafeSelect>;
+/** Deja solo los campos públicos del usuario (sin contraseña ni estados internos). */
+export function serializeUser(user: User): UserSafe {
+  const keys = Object.keys(userSafeSelect) as (keyof UserSafe)[];
+  return Object.fromEntries(keys.map((key) => [key, user[key]])) as UserSafe;
 }

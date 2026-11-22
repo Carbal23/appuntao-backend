@@ -36,7 +36,20 @@ Se configuran en **Environment** del servicio. Ver la lista completa en [entorno
 - `DATABASE_URL`: pooler de Supabase en **modo transacción**, puerto **6543**, con `?pgbouncer=true&connection_limit=5`
 - `DIRECT_URL`: pooler en **modo sesión**, puerto **5432**. La usa `migrate deploy`
 - `JWT_SECRET` (mínimo 32 caracteres)
+- `JWT_EXPIRES_IN`: en development `1d`, para que la app renueve menos contra el plan gratuito. **En production, `15m` o `30m`**: un token robado o una sesión cerrada dejan de servir pronto, y la app lo renueva sola sin que el usuario lo note
 - `RESEND_API_KEY` y `EMAIL_FROM` (dominio verificado en Resend)
+- `TRUST_PROXY=1` (Render pone un proxy delante; sin esto, los límites de intentos se aplican a todos los usuarios a la vez)
+
+## Tarea diaria de mantenimiento
+
+La tarea de `account-lifecycle` corre dentro del servidor a las 3:00 a. m. hora Colombia. Si el servicio está dormido o caído a esa hora (por ejemplo, en un plan de Render que suspende servicios inactivos), esa ejecución no ocurre. En ese caso se ejecuta a mano desde tu máquina:
+
+```bash
+npm run build
+npm run maintenance:run:production
+```
+
+Ver [modulos/account-lifecycle.md](modulos/account-lifecycle.md#tarea-diaria).
 
 ### Conexiones a Supabase
 
@@ -70,3 +83,11 @@ Si el despliegue aplica la migración del catálogo de documentos legales a un e
 2. Revisa el SQL de cada migración pendiente. Si borra o renombra columnas, confirma que sigue el patrón expand/contract de [base-de-datos.md](base-de-datos.md#cambios-que-borran-o-renombran).
 3. Confirma que esas migraciones ya se probaron en development.
 4. Si el cambio necesita variables de entorno nuevas, agrégalas en Render **antes** del despliegue.
+
+### Primer despliegue de esta versión (documentos legales y ciclo de vida)
+
+Además de lo anterior, la primera vez que llegue a production la versión con `legal` y `account-lifecycle`:
+
+1. **Publica los documentos legales** en production (`npm run legal:publish:production ...`). Sin documentos vigentes, el registro responde 503. Ver [modulos/legal.md](modulos/legal.md#publicar-una-versión-nueva).
+2. **Revisa qué hará la primera tarea diaria.** Actúa de inmediato sobre lo que ya cumpla los plazos: negocios inactivos hace más de 6 meses (se eliminan sus datos) y cuentas desactivadas hace más de 48 meses (se anonimizan). Cuenta esos registros antes de desplegar.
+3. Agrega `TRUST_PROXY=1` en Render.

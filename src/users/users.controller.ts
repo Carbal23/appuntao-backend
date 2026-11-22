@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, Param, Patch } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -30,7 +31,11 @@ export class UsersController {
     private readonly accountLifecycle: AccountLifecycleService,
   ) {}
 
+  // Límite por IP: evita la creación masiva de cuentas y el uso del
+  // registro para averiguar qué datos están registrados.
   @Post()
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
   @ApiOperation({ summary: 'Registrar un nuevo usuario' })
   @ApiResponse({
     status: 201,
@@ -45,15 +50,17 @@ export class UsersController {
     return this.usersService.create(data, context);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   @ApiAuth()
   @Get()
-  @ApiOperation({ summary: 'Obtener todos los usuarios activos' })
+  @ApiOperation({ summary: 'Obtener todos los usuarios activos (solo ADMIN)' })
   @ApiResponse({
     status: 200,
     description: 'Lista de usuarios',
     type: [UserResponseDto],
   })
+  @ApiResponse({ status: 403, description: 'No es administrador' })
   findAll() {
     return this.usersService.findAll();
   }
@@ -61,7 +68,9 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @ApiAuth()
   @Get(':id')
-  @ApiOperation({ summary: 'Obtener un usuario por ID' })
+  @ApiOperation({
+    summary: 'Obtener un usuario por ID (el propio usuario o un ADMIN)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Usuario encontrado',
@@ -71,8 +80,8 @@ export class UsersController {
     status: 404,
     description: 'Usuario no encontrado',
   })
-  findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
+  findOne(@Param('id') id: string, @GetUser() actor: UserSafe) {
+    return this.usersService.findOne(id, actor);
   }
 
   @UseGuards(JwtAuthGuard)

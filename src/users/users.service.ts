@@ -48,8 +48,8 @@ export class UsersService {
     const existingUser = await this.prisma.user.findFirst({
       where: {
         OR: [
-          { email: data.email ?? undefined },
-          { phone: data.phone ?? undefined },
+          ...(data.email ? [{ email: data.email }] : []),
+          ...(data.phone ? [{ phone: data.phone }] : []),
           { documentNumber: data.documentNumber },
         ],
       },
@@ -87,8 +87,6 @@ export class UsersService {
     const hashedPassword: string = await bcrypt.hash(data.password, 10);
 
     try {
-      // El usuario y la prueba de su aceptación se crean juntos: no puede
-      // existir una cuenta sin el registro de que aceptó los documentos.
       const user = await this.prisma.$transaction(async (tx) => {
         const created = await tx.user.create({
           data: {
@@ -104,31 +102,9 @@ export class UsersService {
           acceptedLegalDocumentIds,
           context,
         );
+
         return created;
       });
-
-      const debtorMatches = await this.prisma.debtor.findMany({
-        where: {
-          OR: [
-            { documentNumber: data.documentNumber ?? undefined },
-            { phone: data.phone ?? undefined },
-          ],
-          userId: null,
-        },
-      });
-
-      if (debtorMatches.length > 0) {
-        await this.prisma.debtor.updateMany({
-          where: {
-            id: { in: debtorMatches.map((d) => d.id) },
-          },
-          data: { userId: user.id },
-        });
-
-        console.log(
-          `🔗 Vinculados ${debtorMatches.length} deudores al usuario ${user.id}`,
-        );
-      }
 
       return user;
     } catch (error) {
@@ -153,7 +129,11 @@ export class UsersService {
     return users;
   }
 
-  async findOne(id: string): Promise<UserSafe | null> {
+  async findOne(id: string, actor: UserSafe): Promise<UserSafe | null> {
+    if (actor.id !== id && actor.role !== Role.ADMIN) {
+      throw new ForbiddenException('No puedes ver los datos de otro usuario');
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id },
       select: userSafeSelect,
@@ -176,6 +156,17 @@ export class UsersService {
     if (restricted.length && actor.role !== Role.ADMIN) {
       throw new ForbiddenException(
         `Solo un administrador puede modificar: ${restricted.join(', ')}`,
+      );
+    }
+
+    // PartialType deja pasar `null` sin validarlo. Ningún campo editable se
+    // puede vaciar: correo y teléfono son obligatorios desde el registro.
+    const cleared = Object.entries(data)
+      .filter(([, value]) => value === null)
+      .map(([field]) => field);
+    if (cleared.length) {
+      throw new BadRequestException(
+        `Estos campos no se pueden dejar vacíos: ${cleared.join(', ')}`,
       );
     }
 
@@ -258,10 +249,12 @@ export class UsersService {
       select: { id: true },
     });
 
-    if (!userExists) throw new Error('Usuario no encontrado');
+    if (!userExists) throw new NotFoundException('Usuario no encontrado');
 
     const [ownedBusinesses, workingBusinesses, clientBusinesses] =
       await Promise.all([
+        // Los propios incluyen los inactivos (marcados con inactivatedAt):
+        // el dueño todavía puede descargar su información.
         this.prisma.business.findMany({
           where: { ownerId: userId },
           select: {
@@ -270,10 +263,16 @@ export class UsersService {
             address: true,
             currency: true,
             createdAt: true,
+            inactivatedAt: true,
           },
         }),
+        // Donde trabaja: solo negocios activos que no son suyos (el dueño
+        // también figura como miembro OWNER y salía repetido).
         this.prisma.businessUser.findMany({
-          where: { userId },
+          where: {
+            userId,
+            business: { ownerId: { not: userId }, inactivatedAt: null },
+          },
           select: {
             id: true,
             role: true,
@@ -288,7 +287,11 @@ export class UsersService {
           },
         }),
         this.prisma.debtor.findMany({
-          where: { userId },
+          where: {
+            userId,
+            inactivatedAt: null,
+            business: { inactivatedAt: null },
+          },
           select: {
             id: true,
             name: true,
