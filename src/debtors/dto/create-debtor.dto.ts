@@ -46,6 +46,10 @@ export class CreateDebtorDto {
 
   @ApiProperty({ example: 'Cliente nuevo' })
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
+  @MaxLength(500)
   notes?: string;
 }
