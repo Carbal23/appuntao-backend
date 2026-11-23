@@ -2,7 +2,7 @@
 
 **Código:** `src/business/` (`business.*`, `business-ownership.*`, `business-export.service.ts`)
 
-> **Estado:** revisado en `feature/business-review` el 2026-11-22. El backend se probó por script con 44 casos (ver [Qué se verificó](#qué-se-verificó)). No trae migraciones. La app se ajustó en su rama `feature/business-review`; falta probarla en el teléfono.
+> **Estado:** revisado en `feature/business-review` el 2026-11-22. El backend se probó por script con 44 casos (ver [Qué se verificó](#qué-se-verificó)). No trae migraciones. La app se ajustó en su rama `feature/business-review` y se probó en el teléfono. Entregado en development (merge `f33a83a` en `develop`).
 
 ## Propósito
 

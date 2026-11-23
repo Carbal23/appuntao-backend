@@ -7,11 +7,11 @@ Resumen de cada modelo de `prisma/schema.prisma`. El detalle de cómo los usa ca
 | Modelo | Qué representa |
 | --- | --- |
 | `User` | Persona registrada. Puede ser dueña de negocios, miembro de un equipo o deudor vinculado. Tiene un rol de plataforma (`USER` o `ADMIN`) y los campos del ciclo de vida: `inactivatedAt`, `inactivatedBy`, `deletionRequestedAt`, `deletionScheduledAt`, `anonymizedAt` |
-| `Business` | Negocio. Pertenece a un `owner` y tiene equipo, deudores, deudas, pagos e invitaciones. Moneda por defecto `COP` |
+| `Business` | Negocio. Pertenece a un `owner` y tiene equipo, deudores, deudas, pagos e invitaciones. Moneda `COP` (la única aceptada por ahora). `inactivatedAt` marca que está cerrado; se puede reabrir hasta que se borran sus datos |
 | `BusinessUser` | Membresía de un usuario en un negocio, con su rol (`OWNER`, `ADMIN`, `CASHIER`, `VIEWER`). Única por par negocio-usuario |
-| `Debtor` | Cliente de un negocio. Puede existir sin cuenta y vincularse después a un `User` |
+| `Debtor` | Cliente de un negocio. Puede existir sin cuenta y vincularse después a un `User`. `inactivatedAt` marca que lo quitaron de la lista |
 | `Debt` | Deuda de un deudor con un negocio: `amount` original, `balance` pendiente, estado (`OPEN`, `PARTIAL`, `PAID`, `CANCELLED`) y fecha de vencimiento opcional |
-| `Payment` | Movimiento sobre una deuda: pago (`PAYMENT`), ajuste (`ADJUSTMENT`) o reverso (`REVERSAL`), con método (`CASH`, `TRANSFER`, `OTHER`) |
+| `Payment` | Movimiento sobre una deuda: abono (`PAYMENT`), descuento (`DISCOUNT`) o reverso (`REVERSAL`), con método (`CASH`, `TRANSFER`, `OTHER`). El monto siempre es positivo; el tipo dice si sube o baja el saldo. Un reverso apunta al movimiento que deshace con `reversedPaymentId`, que es único: cada movimiento se reversa una sola vez. Ver [payments](modulos/payments.md) |
 | `PaymentGroup` | Agrupa los pagos de un mismo abono repartido entre varias deudas de un deudor. `reversedAt` marca si se reversó |
 | `Invitation` | Invitación a un cliente (`DEBTOR`) o a un miembro del equipo (`BUSINESS_USER`, con su rol), dirigida a un correo o teléfono, con código único, vencimiento, estado (`PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`, `EXPIRED`), quién la creó y quién la aceptó |
 | `RefreshToken` | Refresh tokens guardados como hash, agrupados por familia (rotación) y asociados a un dispositivo |
@@ -31,11 +31,11 @@ Los montos usan `Decimal(12, 2)`.
 | Enum | Valores |
 | --- | --- |
 | `Role` (rol en la plataforma) | `USER`: por defecto, cualquier usuario registrado. `ADMIN`: administrador de la plataforma (soporte), puede desactivar y reactivar cuentas. `MODERATOR` y `SUSPENDED` existen en el esquema pero no se usan |
-| `BusinessUserRole` (rol en un negocio) | `OWNER`: dueño (también está en `Business.ownerId`). `ADMIN`: gestiona el equipo, clientes, deudas y pagos. `CASHIER`: registra deudas y pagos y ve las deudas. `VIEWER`: solo lectura |
+| `BusinessUserRole` (rol en un negocio) | `OWNER`: dueño (también está en `Business.ownerId`). `ADMIN`: corrige clientes, deudas y pagos y maneja cajeros y solo lectura. `CASHIER`: registra clientes, fía y abona. `VIEWER`: solo lectura. Detalle en [arquitectura](arquitectura.md#dos-tipos-de-rol) |
 | `DocumentType` | `CC`, `NIT`, `FOREIGNER` |
 | `DebtStatus` | `OPEN`, `PARTIAL` (con abonos), `PAID`, `CANCELLED` |
-| `PaymentType` / `PaymentMethod` | `PAYMENT`, `ADJUSTMENT`, `REVERSAL` / `CASH`, `TRANSFER`, `OTHER` |
-| `InvitationType` / `InvitationStatus` | `DEBTOR`, `BUSINESS_USER` / `PENDING`, `ACCEPTED`, `EXPIRED` |
+| `PaymentType` / `PaymentMethod` | `PAYMENT` (abono, baja el saldo), `DISCOUNT` (descuento, baja el saldo; antes `ADJUSTMENT`), `REVERSAL` (reverso, sube el saldo) / `CASH`, `TRANSFER`, `OTHER` |
+| `InvitationType` / `InvitationStatus` | `DEBTOR`, `BUSINESS_USER` / `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`, `EXPIRED` |
 | `AuthLogEvent` | Eventos de seguridad: logins, bloqueos, logouts, cambios de contraseña y del ciclo de vida de la cuenta |
 | `InactivationSource` | Quién desactivó una cuenta: `SELF` o `ADMIN` |
 | `LegalAudience` | A quién se le exige un documento legal: `ALL_USERS` o `BUSINESS_OWNERS` |

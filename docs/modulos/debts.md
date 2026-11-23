@@ -2,7 +2,7 @@
 
 **Código:** `src/debts/`
 
-> **Estado:** revisado en `feature/debts-review` el 2026-11-22. El backend se probó por script con 48 casos (ver [Qué se verificó](#qué-se-verificó)). La app se ajustó en su rama `feature/debts-review`; falta probarla en el teléfono.
+> **Estado:** revisado en `feature/debts-review` el 2026-11-22. El backend se probó por script con 48 casos (ver [Qué se verificó](#qué-se-verificó)). La app se ajustó en su rama `feature/debts-review` y se probó en el teléfono. Entregado en development (merge `b6060c1` en `develop`).
 
 ## Propósito
 

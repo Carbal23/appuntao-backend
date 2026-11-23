@@ -2,7 +2,7 @@
 
 **Código:** `src/payments/`
 
-> **Estado:** revisado en `feature/payments-review` el 2026-11-22. El backend se probó por script con 55 casos (ver [Qué se verificó](#qué-se-verificó)). Trae dos migraciones: `20261122180000_payment_reversal_link` y `20261122190000_payment_discount_type`. La app se ajustó en su rama `feature/payments-review`; falta probarla en el teléfono.
+> **Estado:** revisado en `feature/payments-review` el 2026-11-22. El backend se probó por script con 55 casos (ver [Qué se verificó](#qué-se-verificó)). Trae dos migraciones: `20261122180000_payment_reversal_link` y `20261122190000_payment_discount_type`. La app se ajustó en su rama `feature/payments-review` y se probó en el teléfono. Entregado en development (merge `d18db63` en `develop`).
 
 ## Propósito
 
