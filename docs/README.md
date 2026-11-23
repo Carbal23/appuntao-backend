@@ -21,7 +21,7 @@ Cada módulo tiene su documento con propósito, alcance, endpoints, reglas de ne
 | `auth-log` | Registro de eventos de seguridad (logins, bloqueos, logouts) | Pendiente |
 | `users` | Registro y gestión de usuarios | [users.md](modulos/users.md) |
 | `business` | Negocios: creación, edición, inactivación | Pendiente |
-| `business-user` | Equipo del negocio y sus roles | Pendiente |
+| `business-user` | Equipo del negocio y sus roles | [business-user.md](modulos/business-user.md) (backend y app revisados) |
 | `debtors` | Deudores (clientes) de cada negocio | [debtors.md](modulos/debtors.md) (backend y app revisados) |
 | `debts` | Deudas y su saldo | [debts.md](modulos/debts.md) (backend y app revisados) |
 | `payments` | Pagos, abonos agrupados y reversos | [payments.md](modulos/payments.md) (backend y app revisados) |

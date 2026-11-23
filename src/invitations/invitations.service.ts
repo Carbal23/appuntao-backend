@@ -14,6 +14,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { randomInt } from 'crypto';
+import { canManageRole } from 'src/business-user/team-rules';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EmailProvider } from 'src/providers/email.provider';
 import { AuditService } from 'src/audit/audit.service';
@@ -83,7 +84,7 @@ export class InvitationsService {
     if (!business) throw new NotFoundException('Negocio no encontrado');
 
     const actorRole = await this.actorRole(businessId, creatorId);
-    this.assertCanHandle(actorRole, dto.type);
+    this.assertCanHandle(actorRole, dto.type, dto.role);
 
     const email = dto.email;
     let phone = dto.phone;
@@ -246,6 +247,7 @@ export class InvitationsService {
     this.assertCanHandle(
       await this.actorRole(businessId, actorId),
       invitation.type,
+      invitation.role,
     );
     this.assertPending(invitation);
 
@@ -271,6 +273,7 @@ export class InvitationsService {
     this.assertCanHandle(
       await this.actorRole(businessId, actorId),
       existing.type,
+      existing.role,
     );
     if (existing.status !== InvitationStatus.PENDING) {
       throw new ConflictException(
@@ -479,12 +482,24 @@ export class InvitationsService {
   /**
    * El dueño y el administrador manejan las dos clases de invitación. El
    * cajero solo las de clientes: es quien los atiende en el mostrador, pero
-   * no decide quién entra al equipo.
+   * no decide quién entra al equipo. Y el administrador solo invita (y
+   * reenvía o cancela) con los roles que maneja: cajero y solo lectura. Los
+   * administradores los nombra el dueño (ver `team-rules.ts`).
    */
-  private assertCanHandle(role: BusinessUserRole | null, type: InvitationType) {
-    if (role === BusinessUserRole.CASHIER && type !== InvitationType.DEBTOR) {
+  private assertCanHandle(
+    role: BusinessUserRole | null,
+    type: InvitationType,
+    invitedRole?: BusinessUserRole | null,
+  ) {
+    if (type === InvitationType.DEBTOR) return;
+    if (role === BusinessUserRole.CASHIER || role === BusinessUserRole.VIEWER) {
       throw new ForbiddenException(
         'Solo el dueño o un administrador pueden invitar al equipo',
+      );
+    }
+    if (invitedRole && !canManageRole(role, invitedRole)) {
+      throw new ForbiddenException(
+        'Solo el dueño puede invitar administradores',
       );
     }
   }

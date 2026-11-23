@@ -16,7 +16,7 @@ import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { BusinessRoles } from 'src/auth/decorators/business-role.decorator';
 import { BusinessRoleGuard } from 'src/auth/guards/business-role.guard';
 import { BusinessContextGuard } from 'src/auth/guards/business-context.guard';
-import { PaginationDto } from 'src/common/pagination/dto/pagination.dto';
+import { QueryBusinessUserDto } from './dto/query-business-user.dto';
 import {
   ApiOperation,
   ApiParam,
@@ -49,8 +49,6 @@ export class BusinessUserController {
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 10 })
   @ApiQuery({ name: 'search', required: false, example: 'juan' })
-  @ApiQuery({ name: 'sortBy', required: false, example: 'createdAt' })
-  @ApiQuery({ name: 'order', required: false, example: 'desc' })
   @ApiResponse({
     status: 200,
     description: 'Listado de usuarios del negocio',
@@ -58,7 +56,7 @@ export class BusinessUserController {
   })
   async findAll(
     @CurrentBusiness() businessId: string,
-    @Query() query: PaginationDto,
+    @Query() query: QueryBusinessUserDto,
   ) {
     return this.businessUserService.getUsersByBusiness(businessId, query);
   }
@@ -67,7 +65,8 @@ export class BusinessUserController {
   @BusinessRoles('ADMIN', 'OWNER')
   @ApiOperation({
     summary: 'Actualizar rol de usuario en el negocio',
-    description: 'Requiere rol ADMIN o OWNER dentro del negocio',
+    description:
+      'El dueño maneja administradores, cajeros y solo lectura; el administrador solo cajeros y solo lectura. Nadie cambia su propio rol ni el del dueño, y OWNER no se asigna (solo por transferencia).',
   })
   @ApiParam({ name: 'id', description: 'ID del businessUser' })
   @ApiResponse({
@@ -97,11 +96,32 @@ export class BusinessUserController {
     );
   }
 
+  // Va antes de `:id`, si no "me" se tomaría como un id.
+  @Delete('me')
+  @BusinessRoles('ADMIN', 'OWNER', 'CASHIER', 'VIEWER')
+  @ApiOperation({
+    summary: 'Salir del negocio',
+    description:
+      'El usuario deja el equipo por su cuenta. El dueño no puede: primero transfiere el negocio.',
+  })
+  @ApiResponse({
+    status: 200,
+    schema: { example: { message: 'Saliste del negocio' } },
+  })
+  @ApiResponse({ status: 400, description: 'El dueño no puede salirse' })
+  async leave(
+    @CurrentBusiness() businessId: string,
+    @GetUser('id') currentUserId: string,
+  ) {
+    return this.businessUserService.leaveBusiness(businessId, currentUserId);
+  }
+
   @Delete(':id')
-  @BusinessRoles('OWNER')
+  @BusinessRoles('ADMIN', 'OWNER')
   @ApiOperation({
     summary: 'Eliminar usuario del negocio',
-    description: 'Requiere rol OWNER dentro del negocio',
+    description:
+      'El dueño saca a cualquiera menos a sí mismo; el administrador solo a cajeros y solo lectura.',
   })
   @ApiParam({ name: 'id', description: 'ID del businessUser' })
   @ApiResponse({
