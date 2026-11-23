@@ -2,7 +2,7 @@
 
 **Código:** `src/debtors/`
 
-> **Estado:** revisado en `feature/debtors-review` el 2026-11-22. El backend se probó por script con 53 casos (ver [Qué se verificó](#qué-se-verificó)). La app se ajustó en su rama `feature/debtors-review`; falta probarla en el teléfono.
+> **Estado:** revisado en `feature/debtors-review` el 2026-11-22. El backend se probó por script con 53 casos (ver [Qué se verificó](#qué-se-verificó)). La app se ajustó en su rama `feature/debtors-review` y se probó en el teléfono. Entregado en development (merge `896deac` en `develop`).
 
 ## Propósito
 

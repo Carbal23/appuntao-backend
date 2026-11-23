@@ -2,7 +2,7 @@
 
 **Código:** `src/invitations/`
 
-> **Estado:** rediseño en `feature/invitations`, en el backend y en la app. El backend se probó por script el 2026-11-19, con 24 casos (ver [Qué se verificó](#qué-se-verificó)). Los flujos de equipo y de cliente se probaron desde la app el 2026-11-20. El 2026-11-21 se agregaron el permiso del cajero para invitar clientes y la desvinculación; eso falta probarlo.
+> **Estado:** entregado en development, backend y app, el 2026-11-22 (merge `f1ede46`). El backend se probó por script el 2026-11-19, con 24 casos (ver [Qué se verificó](#qué-se-verificó)), y los flujos de equipo y de cliente desde la app el 2026-11-20. El 2026-11-21 se agregaron el permiso del cajero para invitar clientes y la desvinculación. El 2026-11-22, con la revisión de [business-user](business-user.md), el administrador quedó limitado a invitar cajeros y solo lectura. Al cerrar un negocio, sus invitaciones pendientes se cancelan ([business](business.md)).
 
 ## Propósito
 

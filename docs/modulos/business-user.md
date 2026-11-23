@@ -2,7 +2,7 @@
 
 **Código:** `src/business-user/`
 
-> **Estado:** backend revisado en `feature/business-user-review` el 2026-11-22 y probado por script con 36 casos (ver [Qué se verificó](#qué-se-verificó)). No trae migraciones. La app se ajustó en su rama `feature/business-user-review`; falta probarla en el teléfono.
+> **Estado:** backend revisado en `feature/business-user-review` el 2026-11-22 y probado por script con 36 casos (ver [Qué se verificó](#qué-se-verificó)). No trae migraciones. La app se ajustó en su rama `feature/business-user-review` y se probó en el teléfono. Entregado en development (merge `3ca2787` en `develop`).
 
 ## Propósito
 
