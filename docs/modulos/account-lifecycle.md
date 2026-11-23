@@ -19,7 +19,7 @@ Las rutas de la cuenta propia se exponen desde [`users`](users.md#endpoints) y l
 - Correr la **tarea diaria** que aplica los plazos de retención.
 
 **No hace:**
-- Reabrir un negocio cerrado: no existe endpoint para eso.
+- Reabrir un negocio cerrado: lo hace `business` (`PATCH /api/business/:id/reactivate`) mientras sus datos no se hayan borrado.
 - Recuperar una cuenta anonimizada: la anonimización es definitiva.
 - Cerrar un negocio. Eso lo hace `business` (`PATCH /api/business/:id/inactivate`); aquí solo se borran sus datos cuando vence el plazo.
 
@@ -154,6 +154,8 @@ Todos requieren `Authorization: Bearer <token>`. Ninguno usa `x-business-id`: la
 
 ## Reglas de negocio
 
+**Las confirmaciones con contraseña tienen límite:** 5 intentos cada 15 minutos por usuario, sumando cambiar la contraseña, desactivar la cuenta, eliminarla y transferir un negocio (`PasswordConfirmThrottlerGuard`, en `src/common/guards/`). Pasado el límite responden 429, aunque la contraseña sea la correcta. Cuenta cada intento, acierte o no. Sin el límite, alguien con la sesión abierta podría probar contraseñas hasta acertar.
+
 ### Eliminar la cuenta
 
 - Si es dueño de negocios activos, tiene que confirmar con `acknowledgeBusinessClosure: true` que entiende que se cerrarán. Si no lo envía, recibe 400 `BUSINESS_CLOSURE_ACK_REQUIRED` con la lista de negocios. Tener negocios **nunca** impide eliminar la cuenta.
@@ -191,15 +193,16 @@ Es una decisión: sirve para investigar accesos indebidos y para probar lo que p
 
 ### Exportar antes de cerrar
 
-**Un negocio cerrado deja de aparecer en `GET /api/business`**, porque la guardia de negocio ya rechaza cualquier operación sobre él. Por eso la app ofrece la descarga **antes**, no después. Está en tres lugares (desde el commit `4f0c783` de `dev` en la app):
+**Un negocio cerrado deja de aparecer en `GET /api/business`**, porque la guardia de negocio ya rechaza cualquier operación sobre él. Sale en `GET /api/business/closed`, donde el dueño lo puede descargar o reabrir hasta que se borre (ver [business](business.md)). La app ofrece la descarga en cuatro lugares:
 
 - **Perfil → Negocio → "Descargar información"**, siempre disponible para el dueño.
 - **El diálogo de cerrar el negocio**, con el botón "Descargar Excel primero".
 - **La pantalla de eliminar la cuenta**, en cada negocio del que es dueño, con la fecha de la última descarga.
+- **Perfil → "Negocios cerrados"**, después de cerrarlo y hasta que se borre.
 
 En el teléfono el archivo se guarda y se abre el menú de compartir; en web, el navegador lo descarga. Para eso el backend expone `Content-Disposition` en CORS.
 
-El endpoint sí funciona con el negocio cerrado: un dueño que tenga el id puede descargarlo hasta que se borre. `deletion-preview` devuelve `lastExportedAt` para que la app pueda decir "lo descargaste el…".
+El endpoint funciona con el negocio cerrado hasta que se borre. `deletion-preview` devuelve `lastExportedAt` para que la app pueda decir "lo descargaste el…".
 
 Cerrar un negocio (`PATCH /api/business/:id/inactivate`) devuelve `dataDeletionScheduledAt`: la fecha en que se borrarán sus datos.
 
@@ -235,6 +238,7 @@ npm run maintenance:run:local   # o :development / :production
 | --- | --- | --- |
 | 400 | — | Contraseña incorrecta; destinatario que no es miembro activo; transferencia vencida; negocio inactivo o con otro dueño al aceptar |
 | 400 | `BUSINESS_CLOSURE_ACK_REQUIRED` | Pidió eliminar su cuenta siendo dueño de negocios sin confirmar el cierre. Trae `ownedBusinesses` |
+| 429 | — | Más de 5 intentos con contraseña en 15 minutos (desactivar, eliminar, transferir o cambiar la contraseña, sumados) |
 | 403 | `ACCOUNT_DEACTIVATED` | Login de una cuenta que el usuario desactivó |
 | 403 | `ACCOUNT_DELETION_PENDING` | Login de una cuenta con eliminación pendiente. Trae `deletionScheduledAt` |
 | 403 | `ACCOUNT_DISABLED` | Login de una cuenta desactivada por un administrador |

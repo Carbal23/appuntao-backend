@@ -16,6 +16,10 @@ import {
   OwnershipTransferResponseDto,
   RequestOwnershipTransferDto,
 } from './dto/ownership-transfer.dto';
+import {
+  PasswordConfirmLimit,
+  PasswordConfirmThrottlerGuard,
+} from 'src/common/guards/password-confirm-throttler.guard';
 
 @ApiTags('Business')
 @Controller('business')
@@ -62,6 +66,12 @@ export class BusinessOwnershipController {
   }
 
   @Post(':id/ownership-transfer')
+  @UseGuards(PasswordConfirmThrottlerGuard)
+  @PasswordConfirmLimit()
+  @ApiResponse({
+    status: 429,
+    description: 'Más de 5 intentos con contraseña en 15 minutos',
+  })
   @ApiOperation({
     summary: 'Proponer la transferencia del negocio a un miembro',
     description:

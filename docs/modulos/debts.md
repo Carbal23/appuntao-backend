@@ -99,6 +99,7 @@ Cada deuda trae `amount` y `balance` (texto decimal, como `"15000.5"`), `currenc
 - **La anulada conserva su monto y su saldo** como historial, pero no suma: los saldos (`debtors`, `account-lifecycle`) solo cuentan `OPEN` y `PARTIAL`.
 - **Pago y anulación no se cruzan.** Anular toma el mismo bloqueo de fila (`SELECT … FOR UPDATE`) que `payments` al registrar un pago, así que uno espera al otro.
 - **La moneda es la del negocio** al momento de fiar.
+- **No se fía en un negocio que se está cerrando.** Fiar toma el negocio con `FOR SHARE` y cerrarlo con `FOR UPDATE` (ver [business](business.md)): ya cerrado, responde 400. La deuda y su auditoría van en la misma transacción.
 
 ## Flujos
 

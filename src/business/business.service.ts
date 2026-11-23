@@ -7,16 +7,45 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateBusinessDto } from './dto/create-business.dto';
 import { UpdateBusinessDto } from './dto/update-business.dto';
-import { BusinessUserRole, LegalAudience } from '@prisma/client';
+import { QueryBusinessDto } from './dto/query-business.dto';
+import {
+  BusinessUserRole,
+  DebtStatus,
+  InvitationStatus,
+  LegalAudience,
+  OwnershipTransferStatus,
+  Prisma,
+} from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { AuditService } from 'src/audit/audit.service';
 import { AuditAction } from 'src/audit/audit.types';
-import { PaginationDto } from 'src/common/pagination/dto/pagination.dto';
 import { buildWhere } from 'src/common/pagination/utils/build-where.util';
 import { paginate } from 'src/common/pagination/utils/paginate.util';
-import { buildOrder } from 'src/common/pagination/utils/build-order.util';
 import { LegalService } from 'src/legal/legal.service';
 import type { RequestContext } from 'src/auth-log/auth-log.types';
+
+/**
+ * Negocios activos que puede tener una persona como dueña. Alcanza de sobra
+ * para una tienda real y frena la creación masiva desde una sola cuenta. Los
+ * cerrados no cuentan.
+ */
+export const MAX_ACTIVE_OWNED_BUSINESSES = 10;
+
+const memberSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  phone: true,
+} satisfies Prisma.UserSelect;
+
+type LockedBusiness = {
+  id: string;
+  ownerId: string;
+  name: string;
+  address: string | null;
+  inactivatedAt: Date | null;
+};
 
 @Injectable()
 export class BusinessService {
@@ -44,6 +73,10 @@ export class BusinessService {
     );
 
     return this.prisma.$transaction(async (tx) => {
+      // Bloquea al usuario: dos creaciones a la vez no se saltan el tope.
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
+      await this.assertBelowCap(tx, userId);
+
       const business = await tx.business.create({
         data: {
           ...businessData,
@@ -66,22 +99,25 @@ export class BusinessService {
         },
       });
 
-      await this.auditService.log({
-        userId,
-        action: AuditAction.BUSINESS_CREATED,
-        entity: 'Business',
-        entityId: business.id,
-        meta: {
-          businessName: business.name,
-          address: business.address,
+      await this.auditService.log(
+        {
+          userId,
+          action: AuditAction.BUSINESS_CREATED,
+          entity: 'Business',
+          entityId: business.id,
+          meta: {
+            businessName: business.name,
+            address: business.address,
+          },
         },
-      });
+        tx,
+      );
 
       return business;
     });
   }
 
-  async findAllByUser(userId: string, query: PaginationDto) {
+  async findAllByUser(userId: string, query: QueryBusinessDto) {
     const {
       page = 1,
       limit = 10,
@@ -94,9 +130,9 @@ export class BusinessService {
       search,
       searchFields: ['name'],
       filters: {
-        // Un negocio cerrado no se lista: la guardia de negocio ya rechaza
-        // cualquier operación sobre él. Su dueño aún puede descargar sus datos
-        // (GET /business/:id/export) hasta que se eliminen.
+        // Un negocio cerrado no se lista aquí: la guardia de negocio ya
+        // rechaza cualquier operación sobre él. Su dueño lo ve en
+        // GET /business/closed, donde puede descargarlo o reabrirlo.
         inactivatedAt: null,
         OR: [{ ownerId: userId }, { businessUsers: { some: { userId } } }],
       },
@@ -108,22 +144,43 @@ export class BusinessService {
         where,
         include: {
           businessUsers: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  email: true,
-                },
-              },
-            },
+            include: { user: { select: memberSelect } },
           },
         },
-        orderBy: buildOrder(sortBy, order),
+        orderBy: [{ [sortBy]: order }, { id: 'asc' }],
       },
       { page, limit },
     );
+  }
+
+  /**
+   * Los negocios cerrados del usuario como dueño, con la fecha en que se
+   * eliminan sus datos. Mientras tanto puede descargarlos o reabrirlos.
+   */
+  async findClosedByOwner(userId: string) {
+    const businesses = await this.prisma.business.findMany({
+      where: { ownerId: userId, inactivatedAt: { not: null } },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        currency: true,
+        createdAt: true,
+        inactivatedAt: true,
+      },
+      orderBy: { inactivatedAt: 'desc' },
+    });
+
+    return businesses.map((business) => {
+      const dataDeletionScheduledAt = this.deletionDate(
+        business.inactivatedAt!,
+      );
+      return {
+        ...business,
+        dataDeletionScheduledAt,
+        canReactivate: dataDeletionScheduledAt > new Date(),
+      };
+    });
   }
 
   async findOne(id: string, userId: string) {
@@ -131,17 +188,7 @@ export class BusinessService {
       where: { id },
       include: {
         businessUsers: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                phone: true,
-              },
-            },
-          },
+          include: { user: { select: memberSelect } },
         },
       },
     });
@@ -161,95 +208,199 @@ export class BusinessService {
   }
 
   async update(id: string, dto: UpdateBusinessDto, userId: string) {
-    const business = await this.prisma.business.findUnique({ where: { id } });
-    if (!business) throw new NotFoundException('Negocio no encontrado');
-    if (business.ownerId !== userId)
-      throw new ForbiddenException(
-        'Solo el propietario puede actualizar el negocio',
+    return this.prisma.$transaction(async (tx) => {
+      const business = await this.lockOwned(tx, id, userId, 'actualizar');
+      if (business.inactivatedAt)
+        throw new BadRequestException(
+          'No puedes modificar un negocio inactivado',
+        );
+
+      // Solo lo que de verdad cambia: así la auditoría dice qué había antes.
+      const changes: Prisma.BusinessUpdateInput = {};
+      const meta: Record<string, string | null> = {};
+      if (dto.name !== undefined && dto.name !== business.name) {
+        changes.name = dto.name;
+        meta.previousBusinessName = business.name;
+        meta.newBusinessName = dto.name;
+      }
+      if (dto.address !== undefined && dto.address !== business.address) {
+        changes.address = dto.address;
+        meta.previousAddress = business.address;
+        meta.newAddress = dto.address;
+      }
+
+      if (Object.keys(changes).length === 0) {
+        return tx.business.findUniqueOrThrow({ where: { id } });
+      }
+
+      const updated = await tx.business.update({
+        where: { id },
+        data: changes,
+      });
+
+      await this.auditService.log(
+        {
+          userId,
+          action: AuditAction.BUSINESS_UPDATED,
+          entity: 'Business',
+          entityId: id,
+          meta,
+        },
+        tx,
       );
 
-    if (business.inactivatedAt)
-      throw new BadRequestException(
-        'No puedes modificar un negocio inactivado',
-      );
-
-    const updated = await this.prisma.business.update({
-      where: { id },
-      data: dto,
+      return updated;
     });
-
-    await this.auditService.log({
-      userId,
-      action: AuditAction.BUSINESS_UPDATED,
-      entity: 'Business',
-      entityId: updated.id,
-      meta: {
-        previousBusinessName: updated.name,
-        newBusinessName: dto.name,
-        previousAddress: updated.address,
-        newAddress: dto.address,
-      },
-    });
-
-    return updated;
   }
 
   async inactivate(id: string, userId: string) {
-    const business = await this.prisma.business.findUnique({
-      where: { id },
-      include: {
-        debts: true,
-      },
-    });
-
-    if (!business) {
-      throw new NotFoundException('Negocio no encontrado');
-    }
-
-    if (business.ownerId !== userId) {
-      throw new ForbiddenException(
-        'Solo el propietario puede inactivar el negocio',
-      );
-    }
-
-    if (business.inactivatedAt) {
-      throw new BadRequestException('El negocio ya está inactivo');
-    }
-
-    const hasActiveDebts = business.debts.some(
-      (d) => d.status !== 'PAID' && d.status !== 'CANCELLED',
-    );
-
-    if (hasActiveDebts) {
-      throw new BadRequestException(
-        'No puedes inactivar un negocio con deudas activas',
-      );
-    }
-
     const inactivatedAt = new Date();
-    await this.prisma.business.update({
-      where: { id },
-      data: { inactivatedAt },
-    });
 
-    await this.auditService.log({
-      userId,
-      action: AuditAction.BUSINESS_DEACTIVATED,
-      entity: 'Business',
-      entityId: id,
+    await this.prisma.$transaction(async (tx) => {
+      // El bloqueo frena a quien esté fiando en este momento: crear una deuda
+      // toma el mismo negocio con FOR SHARE, así que espera a que esto
+      // termine y, ya cerrado, se rechaza.
+      const business = await this.lockOwned(tx, id, userId, 'inactivar');
+      if (business.inactivatedAt) {
+        throw new BadRequestException('El negocio ya está inactivo');
+      }
+
+      const activeDebts = await tx.debt.count({
+        where: {
+          businessId: id,
+          status: { in: [DebtStatus.OPEN, DebtStatus.PARTIAL] },
+        },
+      });
+      if (activeDebts > 0) {
+        throw new BadRequestException(
+          `No puedes inactivar un negocio con deudas activas: ${
+            activeDebts === 1
+              ? 'queda 1 deuda por cobrar'
+              : `quedan ${activeDebts} deudas por cobrar`
+          }`,
+        );
+      }
+
+      await tx.business.update({
+        where: { id },
+        data: { inactivatedAt },
+      });
+
+      // Lo pendiente del negocio ya no se puede responder.
+      await tx.invitation.updateMany({
+        where: { businessId: id, status: InvitationStatus.PENDING },
+        data: {
+          status: InvitationStatus.CANCELLED,
+          respondedAt: inactivatedAt,
+        },
+      });
+      await tx.businessOwnershipTransfer.updateMany({
+        where: { businessId: id, status: OwnershipTransferStatus.PENDING },
+        data: {
+          status: OwnershipTransferStatus.CANCELLED,
+          respondedAt: inactivatedAt,
+        },
+      });
+
+      await this.auditService.log(
+        {
+          userId,
+          action: AuditAction.BUSINESS_DEACTIVATED,
+          entity: 'Business',
+          entityId: id,
+        },
+        tx,
+      );
     });
 
     // Los datos de un negocio inactivo se eliminan pasado el plazo de
-    // retención; hasta entonces el dueño puede descargarlos.
-    const dataDeletionScheduledAt = new Date(inactivatedAt);
-    dataDeletionScheduledAt.setUTCMonth(
-      dataDeletionScheduledAt.getUTCMonth() +
-        this.config.getOrThrow<number>('account.closedBusinessRetentionMonths'),
-    );
+    // retención; hasta entonces el dueño puede descargarlos o reabrirlo.
+    const dataDeletionScheduledAt = this.deletionDate(inactivatedAt);
 
     return {
-      message: `Negocio inactivado correctamente. Su información se eliminará el ${new Intl.DateTimeFormat('es-CO', { dateStyle: 'long', timeZone: 'America/Bogota' }).format(dataDeletionScheduledAt)}; hasta entonces puedes descargarla.`,
+      message: `Negocio inactivado correctamente. Su información se eliminará el ${new Intl.DateTimeFormat('es-CO', { dateStyle: 'long', timeZone: 'America/Bogota' }).format(dataDeletionScheduledAt)}; hasta entonces puedes descargarla o reabrir el negocio.`,
       dataDeletionScheduledAt,
     };
+  }
+
+  /**
+   * Reabre un negocio cerrado, mientras sus datos no se hayan eliminado. Todo
+   * vuelve como estaba: clientes, deudas y equipo. Cuenta para el tope de
+   * negocios activos.
+   */
+  async reactivate(id: string, userId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const business = await this.lockOwned(tx, id, userId, 'reabrir');
+      if (!business.inactivatedAt) {
+        throw new BadRequestException('El negocio ya está activo');
+      }
+      if (this.deletionDate(business.inactivatedAt) <= new Date()) {
+        throw new BadRequestException(
+          'Venció el plazo para reabrir este negocio: su información se va a eliminar',
+        );
+      }
+
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
+      await this.assertBelowCap(tx, userId);
+
+      const reactivated = await tx.business.update({
+        where: { id },
+        data: { inactivatedAt: null },
+      });
+
+      await this.auditService.log(
+        {
+          userId,
+          action: AuditAction.BUSINESS_REACTIVATED,
+          entity: 'Business',
+          entityId: id,
+          meta: { inactivatedAt: business.inactivatedAt.toISOString() },
+        },
+        tx,
+      );
+
+      return reactivated;
+    });
+  }
+
+  // ---------------------------------------------------------- utilidades
+
+  /** Bloquea el negocio y valida que exista y que el usuario sea el dueño. */
+  private async lockOwned(
+    tx: Prisma.TransactionClient,
+    id: string,
+    userId: string,
+    verb: string,
+  ): Promise<LockedBusiness> {
+    const [business] = await tx.$queryRaw<LockedBusiness[]>`
+      SELECT id, "ownerId", name, address, "inactivatedAt"
+      FROM "Business" WHERE id = ${id} FOR UPDATE`;
+    if (!business) throw new NotFoundException('Negocio no encontrado');
+    if (business.ownerId !== userId) {
+      throw new ForbiddenException(
+        `Solo el propietario puede ${verb} el negocio`,
+      );
+    }
+    return business;
+  }
+
+  private async assertBelowCap(tx: Prisma.TransactionClient, userId: string) {
+    const active = await tx.business.count({
+      where: { ownerId: userId, inactivatedAt: null },
+    });
+    if (active >= MAX_ACTIVE_OWNED_BUSINESSES) {
+      throw new BadRequestException(
+        `Ya tienes ${MAX_ACTIVE_OWNED_BUSINESSES} negocios activos, el máximo. Cierra uno para abrir otro.`,
+      );
+    }
+  }
+
+  private deletionDate(inactivatedAt: Date): Date {
+    const date = new Date(inactivatedAt);
+    date.setUTCMonth(
+      date.getUTCMonth() +
+        this.config.getOrThrow<number>('account.closedBusinessRetentionMonths'),
+    );
+    return date;
   }
 }
