@@ -18,7 +18,7 @@ Cada módulo tiene su documento con propósito, alcance, endpoints, reglas de ne
 | Módulo | Qué hace | Documento |
 | --- | --- | --- |
 | `auth` | Login, refresh token, logout, sesiones por dispositivo | [auth.md](modulos/auth.md) |
-| `auth-log` | Registro de eventos de seguridad (logins, bloqueos, logouts) | Pendiente: se documenta con la revisión de `audit` |
+| `auth-log` | Registro de eventos de seguridad (logins, bloqueos, contraseñas, estado de la cuenta) | [auth-log.md](modulos/auth-log.md) (revisado) |
 | `users` | Registro y gestión de usuarios | [users.md](modulos/users.md) |
 | `business` | Negocios: creación, edición, cierre y reapertura | [business.md](modulos/business.md) (backend y app revisados) |
 | `business-user` | Equipo del negocio y sus roles | [business-user.md](modulos/business-user.md) (backend y app revisados) |
@@ -26,7 +26,7 @@ Cada módulo tiene su documento con propósito, alcance, endpoints, reglas de ne
 | `debts` | Deudas y su saldo | [debts.md](modulos/debts.md) (backend y app revisados) |
 | `payments` | Pagos, abonos agrupados y reversos | [payments.md](modulos/payments.md) (backend y app revisados) |
 | `invitations` | Invitaciones a clientes y miembros del equipo | [invitations.md](modulos/invitations.md) (backend y app entregados) |
-| `audit` | Registro de auditoría de acciones | Pendiente: revisión y documento |
+| `audit` | Registro de auditoría de acciones | [audit.md](modulos/audit.md) (revisado) |
 | `health` | Health check para el despliegue | [health.md](modulos/health.md) |
 | `legal` | Documentos legales versionados (catálogo de tipos) y prueba de aceptación (Ley 1581) | [legal.md](modulos/legal.md) |
 | `account-lifecycle` | Desactivar y eliminar la cuenta, transferir y exportar negocios, tarea diaria de retención | [account-lifecycle.md](modulos/account-lifecycle.md) |

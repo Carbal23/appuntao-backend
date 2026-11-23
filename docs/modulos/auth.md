@@ -134,6 +134,8 @@ Los access tokens ya emitidos siguen siendo válidos hasta que venzan; el logout
 | `LOGIN_SUCCESS` | Login correcto |
 | `LOGIN_FAILED` | Credenciales inválidas (`INVALID_CREDENTIALS`), identificador ambiguo (`AMBIGUOUS_IDENTIFIER`) o cuenta no activa (`ACCOUNT_*`) |
 | `LOGIN_BLOCKED` | Se superó el límite de intentos |
+
+Lo que se escribió en `identifier` se guarda solo si corresponde a una cuenta, o si es un correo o solo dígitos; si no, queda como `(otro)`, para no guardar una contraseña escrita en el campo equivocado. Detalle en [auth-log](auth-log.md#qué-se-guarda-del-identificador).
 | `REFRESH_TOKEN_REUSED` | Se reutilizó un refresh token ya rotado (fuera del margen de 30 s) |
 | `LOGOUT` / `LOGOUT_ALL_DEVICES` | Cierre de sesión |
 

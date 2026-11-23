@@ -30,6 +30,7 @@ Los archivos `.env*` **no van en Git**. En el servidor de despliegue las variabl
 | `ACCOUNT_DELETION_GRACE_DAYS` | No | `15` | Días entre la solicitud de eliminación de una cuenta y su anonimización |
 | `INACTIVE_ACCOUNT_RETENTION_MONTHS` | No | `48` | Meses tras los cuales se anonimiza una cuenta desactivada |
 | `CLOSED_BUSINESS_RETENTION_MONTHS` | No | `6` | Meses tras los cuales se eliminan los datos de un negocio inactivo |
+| `AUTH_LOG_RETENTION_MONTHS` | No | `12` | Meses tras los cuales se borran los eventos de seguridad (`AuthLog`) |
 
 ## Ejemplos
 

@@ -90,7 +90,7 @@ Todos exigen `Authorization: Bearer <token>` y `x-business-id`.
 | `BUSINESS_USER_ROLE_UPDATED` | Cambio de rol | `userId`, `businessId`, `previousRole`, `newRole` |
 | `BUSINESS_USER_REMOVED` | Lo sacaron | `userId`, `businessId`, `role` |
 | `BUSINESS_USER_LEFT` | Se salió | `userId`, `businessId`, `role` |
-| `BUSINESS_USER_ADDED` | Entró por invitación (lo escribe `invitations`) | — |
+| `BUSINESS_USER_ADDED` | Entró por invitación (lo escribe `invitations`, dentro de la transacción) | `userId`, `businessId`, `role`, `invitationId`, `invitedById` |
 
 En los registros anteriores a esta revisión la clave del rol anterior está escrita `previusRole`.
 

@@ -1,7 +1,9 @@
+import { Prisma } from '@prisma/client';
+
+/** Lo que se audita. Ver la tabla completa en docs/modulos/audit.md. */
 export enum AuditAction {
   // Debt
   DEBT_CREATED = 'DEBT_CREATED',
-  DEBT_UPDATED = 'DEBT_UPDATED',
   DEBT_STATUS_CHANGED = 'DEBT_STATUS_CHANGED',
   DEBT_CANCELLED = 'DEBT_CANCELLED',
 
@@ -18,6 +20,7 @@ export enum AuditAction {
   INVITATION_RESENT = 'INVITATION_RESENT',
 
   // Business Users
+  // Entró al equipo aceptando una invitación.
   BUSINESS_USER_ADDED = 'BUSINESS_USER_ADDED',
   BUSINESS_USER_ROLE_UPDATED = 'BUSINESS_USER_ROLE_UPDATED',
   BUSINESS_USER_REMOVED = 'BUSINESS_USER_REMOVED',
@@ -31,7 +34,7 @@ export enum AuditAction {
   // La ficha deja de estar ligada a una cuenta. meta.by: BUSINESS o CLIENT.
   DEBTOR_UNLINKED = 'DEBTOR_UNLINKED',
 
-  //business
+  // Business
   BUSINESS_CREATED = 'BUSINESS_CREATED',
   BUSINESS_UPDATED = 'BUSINESS_UPDATED',
   BUSINESS_DEACTIVATED = 'BUSINESS_DEACTIVATED',
@@ -48,9 +51,12 @@ export enum AuditAction {
 }
 
 export interface LogParams {
+  /** Quién lo hizo. Vacío en lo que hace el sistema (la purga). */
   userId?: string;
   action: AuditAction;
+  /** Modelo sobre el que se actuó: 'Debt', 'Payment', 'Business'… */
   entity: string;
   entityId?: string;
-  meta?: any;
+  /** Los datos del cambio. Sin contraseñas ni tokens. */
+  meta?: Prisma.InputJsonValue;
 }
