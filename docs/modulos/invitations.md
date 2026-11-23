@@ -28,7 +28,7 @@ La invitación va dirigida a un **correo o teléfono**. Le aparece en la app a q
 **No hace:**
 - Enviar SMS ni mensajes de WhatsApp: el negocio comparte el enlace desde su propio teléfono.
 - Invitar como `OWNER`: la propiedad solo cambia por transferencia (`account-lifecycle`).
-- Gestionar miembros ya existentes (cambiar rol, quitar): `business-user`.
+- Gestionar miembros ya existentes (cambiar rol, quitar, salirse): `business-user`.
 
 ## Modelos
 
@@ -46,7 +46,7 @@ Todos exigen `Authorization: Bearer <token>`.
 
 ### Lado del negocio
 
-Exigen `x-business-id` y rol `OWNER`, `ADMIN` o `CASHIER` en ese negocio. **El cajero solo maneja invitaciones de clientes** (`DEBTOR`): si intenta crear, reenviar o cancelar una del equipo recibe 403, y al listar solo se le devuelven las de clientes. Es quien atiende a los clientes en el mostrador, pero no decide quién entra al equipo.
+Exigen `x-business-id` y rol `OWNER`, `ADMIN` o `CASHIER` en ese negocio. **El cajero solo maneja invitaciones de clientes** (`DEBTOR`): si intenta crear, reenviar o cancelar una del equipo recibe 403, y al listar solo se le devuelven las de clientes. Es quien atiende a los clientes en el mostrador, pero no decide quién entra al equipo. **El administrador solo invita como cajero o solo lectura**: invitar, reenviar o cancelar una invitación de administrador le responde 403, porque los administradores los nombra el dueño (ver [Quién maneja a quién](business-user.md#quién-maneja-a-quién)).
 
 | Método | Ruta | Qué hace |
 | --- | --- | --- |
