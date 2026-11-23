@@ -12,6 +12,8 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { ApiAuth } from 'src/common/swagger/auth.decorator';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { BusinessOwnershipService } from './business-ownership.service';
+import { ReqContext } from 'src/common/decorators/request-context.decorator';
+import type { RequestContext } from 'src/auth-log/auth-log.types';
 import {
   OwnershipTransferResponseDto,
   RequestOwnershipTransferDto,
@@ -88,12 +90,14 @@ export class BusinessOwnershipController {
     @Param('id') businessId: string,
     @GetUser('id') userId: string,
     @Body() dto: RequestOwnershipTransferDto,
+    @ReqContext() context: RequestContext,
   ) {
     return this.ownership.requestTransfer(
       businessId,
       userId,
       dto.toUserId,
       dto.password,
+      context,
     );
   }
 

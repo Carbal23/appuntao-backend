@@ -7,10 +7,11 @@ import { BusinessOwnershipService } from './business-ownership.service';
 import { BusinessOwnershipController } from './business-ownership.controller';
 import { BusinessExportService } from './business-export.service';
 import { LegalModule } from 'src/legal/legal.module';
+import { AuthLogModule } from 'src/auth-log/auth-log.module';
 import { EmailProvider } from 'src/providers/email.provider';
 
 @Module({
-  imports: [PrismaModule, AuditModule, LegalModule],
+  imports: [PrismaModule, AuditModule, LegalModule, AuthLogModule],
   controllers: [BusinessController, BusinessOwnershipController],
   providers: [
     BusinessService,

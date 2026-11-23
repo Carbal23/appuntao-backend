@@ -179,7 +179,7 @@ Todos requieren `Authorization: Bearer <token>`. Ninguno usa `x-business-id`: la
 
 **La anonimización no borra los registros de seguridad.** Cada intento de login guarda el identificador que se escribió (correo, celular o documento), la IP, el navegador o la app y el dispositivo, y eso se conserva después de eliminar la cuenta.
 
-Es una decisión: sirve para investigar accesos indebidos y para probar lo que pasó con una cuenta. Pero es tratamiento de datos personales después de la supresión, así que **la Política de Tratamiento de Datos Personales tiene que decirlo**: qué se conserva, para qué y por cuánto tiempo. Hoy no hay un plazo de borrado para `AuthLog`. Queda pendiente definirlo y agregarlo a la tarea diaria.
+Es una decisión: sirve para investigar accesos indebidos y para probar lo que pasó con una cuenta. Pero es tratamiento de datos personales después de la supresión, así que **la Política de Tratamiento de Datos Personales tiene que decirlo**: qué se conserva, para qué y por cuánto tiempo. Se borran a los **12 meses** (`AUTH_LOG_RETENTION_MONTHS`) en la tarea diaria. Detalle en [auth-log](auth-log.md).
 
 ### Transferencia
 
@@ -213,13 +213,16 @@ Cerrar un negocio (`PATCH /api/business/:id/inactivate`) devuelve `dataDeletionS
 1. Anonimiza las cuentas cuya eliminación venció.
 2. Anonimiza las cuentas desactivadas hace más de `INACTIVE_ACCOUNT_RETENTION_MONTHS`.
 3. Marca como vencidas (`EXPIRED`) las transferencias sin respuesta.
-4. Borra los datos de los negocios cerrados hace más de `CLOSED_BUSINESS_RETENTION_MONTHS`: clientes, deudas, pagos, invitaciones, miembros, transferencias y su auditoría, porque esa auditoría guarda datos de los clientes. Solo quedan el registro de las exportaciones y el de la eliminación (`BUSINESS_PURGED`).
+4. Marca como vencidas las invitaciones sin respuesta.
+5. Borra los datos de los negocios cerrados hace más de `CLOSED_BUSINESS_RETENTION_MONTHS`: clientes, deudas, pagos, invitaciones, miembros, transferencias y su auditoría, porque esa auditoría guarda datos de los clientes. Solo quedan el registro de las exportaciones y el de la eliminación (`BUSINESS_PURGED`).
+6. Borra los eventos de seguridad (`AuthLog`) de más de `AUTH_LOG_RETENTION_MONTHS`. Va al final para que las anonimizaciones de esta misma corrida queden registradas.
 
 | Variable (opcional) | Por defecto | Qué es |
 | --- | --- | --- |
 | `ACCOUNT_DELETION_GRACE_DAYS` | 15 | Días entre la solicitud y la anonimización. Debe caber en los 15 días hábiles que da la ley para atender el reclamo |
 | `INACTIVE_ACCOUNT_RETENTION_MONTHS` | 48 | Meses que se conserva una cuenta desactivada |
 | `CLOSED_BUSINESS_RETENTION_MONTHS` | 6 | Meses que se conservan los datos de un negocio cerrado |
+| `AUTH_LOG_RETENTION_MONTHS` | 12 | Meses que se conservan los eventos de seguridad |
 
 Para ejecutarla a mano, por ejemplo si el servidor estuvo caído a esa hora:
 
@@ -264,6 +267,6 @@ La app decide según `error`, nunca según el texto de `message`.
 - **Decisión:** eliminar no es inmediato, sino que deja 15 días de gracia. **Por qué:** una eliminación por error no tiene arreglo, y la ley da 15 días hábiles para atender la solicitud.
 - **Decisión:** la anonimización conserva los datos de los negocios donde la persona era cliente. **Por qué:** son del negocio, que es el Responsable de esos datos, y no del usuario que se va.
 - **Decisión:** la transferencia necesita que el destinatario acepte. **Por qué:** ser dueño implica responder por el negocio y por los datos de sus clientes.
-- **Pendiente:** fijar un plazo de retención para `AuthLog` y anunciarlo en la política de datos.
+- **Decisión (2026-11-22):** `AuthLog` se conserva 12 meses ([auth-log](auth-log.md)). **Pendiente:** anunciarlo en la política de datos.
 - **Pendiente:** avisar también por correo cuando una transferencia vence, y notificaciones push cuando la app las tenga.
 - **Pendiente:** Google Play pide además una **página web** donde se explique cómo pedir la eliminación sin la app.

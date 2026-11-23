@@ -118,31 +118,36 @@ export class DebtorsService {
   ): Promise<Debtor> {
     await this.assertNoDuplicate(businessId, data);
 
-    const debtor = await this.prisma.debtor.create({
-      // No se vincula a ningún usuario por coincidencia de teléfono o
-      // documento: el vínculo solo se crea cuando el cliente acepta una
-      // invitación del negocio (POST /invitations/accept).
-      data: {
-        ...data,
-        businessId,
-      },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const debtor = await tx.debtor.create({
+        // No se vincula a ningún usuario por coincidencia de teléfono o
+        // documento: el vínculo solo se crea cuando el cliente acepta una
+        // invitación del negocio (POST /invitations/accept).
+        data: {
+          ...data,
+          businessId,
+        },
+      });
 
-    await this.auditService.log({
-      userId: currentUserId,
-      action: AuditAction.DEBTOR_CREATED,
-      entity: 'Debtor',
-      entityId: debtor.id,
-      meta: {
-        debtorId: debtor.id,
-        name: data.name,
-        documentNumber: data.documentNumber,
-        phone: data.phone,
-        businessId,
-      },
-    });
+      await this.auditService.log(
+        {
+          userId: currentUserId,
+          action: AuditAction.DEBTOR_CREATED,
+          entity: 'Debtor',
+          entityId: debtor.id,
+          meta: {
+            debtorId: debtor.id,
+            name: data.name,
+            documentNumber: data.documentNumber ?? null,
+            phone: data.phone ?? null,
+            businessId,
+          },
+        },
+        tx,
+      );
 
-    return debtor;
+      return debtor;
+    });
   }
 
   async findAll(businessId: string, query: DebtorQueryDto) {
@@ -422,31 +427,36 @@ export class DebtorsService {
       id,
     );
 
-    const updated = await this.prisma.debtor.update({
-      where: { id },
-      data: changes,
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.debtor.update({
+        where: { id },
+        data: changes,
+      });
 
-    await this.auditService.log({
-      userId: currentUserId,
-      action: AuditAction.DEBTOR_UPDATED,
-      entity: 'Debtor',
-      entityId: debtor.id,
-      meta: {
-        debtorId: debtor.id,
-        previousName: debtor.name,
-        newName: updated.name,
-        previousDocumentType: debtor.documentType,
-        newDocumentType: updated.documentType,
-        previousDocumentNumber: debtor.documentNumber,
-        newDocumentNumber: updated.documentNumber,
-        previousPhone: debtor.phone,
-        newPhone: updated.phone,
-        businessId: debtor.businessId,
-      },
-    });
+      await this.auditService.log(
+        {
+          userId: currentUserId,
+          action: AuditAction.DEBTOR_UPDATED,
+          entity: 'Debtor',
+          entityId: debtor.id,
+          meta: {
+            debtorId: debtor.id,
+            previousName: debtor.name,
+            newName: updated.name,
+            previousDocumentType: debtor.documentType,
+            newDocumentType: updated.documentType,
+            previousDocumentNumber: debtor.documentNumber,
+            newDocumentNumber: updated.documentNumber,
+            previousPhone: debtor.phone,
+            newPhone: updated.phone,
+            businessId: debtor.businessId,
+          },
+        },
+        tx,
+      );
 
-    return updated;
+      return updated;
+    });
   }
 
   /**
@@ -475,7 +485,7 @@ export class DebtorsService {
     if (debtor.inactivatedAt)
       throw new NotFoundException('Deudor se encuentra inactivo');
 
-    const cancelledInvitations = await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       const { count } = await tx.debtor.updateMany({
         where: {
           id,
@@ -499,20 +509,22 @@ export class DebtorsService {
         },
         data: { status: InvitationStatus.CANCELLED, respondedAt: new Date() },
       });
-      return cancelled.count;
-    });
 
-    await this.auditService.log({
-      userId: currentUserId,
-      action: AuditAction.DEBTOR_INACTIVATED,
-      entity: 'Debtor',
-      entityId: debtor.id,
-      meta: {
-        debtorId: debtor.id,
-        businessId,
-        previousUserId: debtor.userId,
-        cancelledInvitations,
-      },
+      await this.auditService.log(
+        {
+          userId: currentUserId,
+          action: AuditAction.DEBTOR_INACTIVATED,
+          entity: 'Debtor',
+          entityId: debtor.id,
+          meta: {
+            debtorId: debtor.id,
+            businessId,
+            previousUserId: debtor.userId,
+            cancelledInvitations: cancelled.count,
+          },
+        },
+        tx,
+      );
     });
 
     return { message: 'El deudor quedó inactivo' };
@@ -536,17 +548,21 @@ export class DebtorsService {
       );
     }
 
-    await this.prisma.debtor.update({
-      where: { id },
-      data: { userId: null },
-    });
-
-    await this.auditService.log({
-      userId: actorId,
-      action: AuditAction.DEBTOR_UNLINKED,
-      entity: 'Debtor',
-      entityId: id,
-      meta: { businessId, previousUserId: debtor.userId, by: 'BUSINESS' },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.debtor.update({
+        where: { id },
+        data: { userId: null },
+      });
+      await this.auditService.log(
+        {
+          userId: actorId,
+          action: AuditAction.DEBTOR_UNLINKED,
+          entity: 'Debtor',
+          entityId: id,
+          meta: { businessId, previousUserId: debtor.userId, by: 'BUSINESS' },
+        },
+        tx,
+      );
     });
 
     return { message: 'Cliente desvinculado: ya no ve su cuenta en la app' };
@@ -564,21 +580,25 @@ export class DebtorsService {
     });
     if (!debtor) throw new NotFoundException('Cuenta no encontrada');
 
-    await this.prisma.debtor.update({
-      where: { id: debtor.id },
-      data: { userId: null },
-    });
-
-    await this.auditService.log({
-      userId,
-      action: AuditAction.DEBTOR_UNLINKED,
-      entity: 'Debtor',
-      entityId: debtor.id,
-      meta: {
-        businessId: debtor.businessId,
-        previousUserId: userId,
-        by: 'CLIENT',
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.debtor.update({
+        where: { id: debtor.id },
+        data: { userId: null },
+      });
+      await this.auditService.log(
+        {
+          userId,
+          action: AuditAction.DEBTOR_UNLINKED,
+          entity: 'Debtor',
+          entityId: debtor.id,
+          meta: {
+            businessId: debtor.businessId,
+            previousUserId: userId,
+            by: 'CLIENT',
+          },
+        },
+        tx,
+      );
     });
 
     return { message: 'Ya no verás esta tienda en tu cuenta' };

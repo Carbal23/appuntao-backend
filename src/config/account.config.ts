@@ -19,4 +19,11 @@ export default registerAs('account', () => ({
     process.env.CLOSED_BUSINESS_RETENTION_MONTHS || '6',
     10,
   ),
+  // Meses que se conservan los eventos de seguridad (AuthLog) antes de
+  // borrarlos. Son datos personales: IP, dispositivo y lo que se escribió al
+  // entrar. La política de datos debe decir este plazo.
+  authLogRetentionMonths: parseInt(
+    process.env.AUTH_LOG_RETENTION_MONTHS || '12',
+    10,
+  ),
 }));

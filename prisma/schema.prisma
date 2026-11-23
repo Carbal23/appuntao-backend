@@ -192,6 +192,9 @@ model AuditLog {
   entityId  String?
   meta      Json?
   createdAt DateTime @default(now())
+
+  @@index([entityId])
+  @@index([userId, createdAt])
 }
 
 model RefreshToken {
@@ -244,6 +247,8 @@ enum AuthLogEvent {
   ACCOUNT_DELETION_REQUESTED
   ACCOUNT_DELETION_CANCELLED
   ACCOUNT_ANONYMIZED
+  PASSWORD_CONFIRM_FAILED
+  PASSWORD_CONFIRM_BLOCKED
 }
 
 enum InactivationSource {

@@ -251,13 +251,18 @@ export class InvitationsService {
     );
     this.assertPending(invitation);
 
-    await this.close(invitation.id, InvitationStatus.CANCELLED);
-    await this.auditService.log({
-      userId: actorId,
-      action: AuditAction.INVITATION_CANCELLED,
-      entity: 'Invitation',
-      entityId: id,
-      meta: { businessId, type: invitation.type },
+    await this.prisma.$transaction(async (tx) => {
+      await this.close(invitation.id, InvitationStatus.CANCELLED, tx);
+      await this.auditService.log(
+        {
+          userId: actorId,
+          action: AuditAction.INVITATION_CANCELLED,
+          entity: 'Invitation',
+          entityId: id,
+          meta: { businessId, type: invitation.type },
+        },
+        tx,
+      );
     });
 
     return { message: 'Invitación cancelada' };
@@ -358,13 +363,18 @@ export class InvitationsService {
     this.assertUsable(invitation);
     this.assertRecipient(invitation, user);
 
-    await this.close(invitation.id, InvitationStatus.REJECTED);
-    await this.auditService.log({
-      userId: user.id,
-      action: AuditAction.INVITATION_REJECTED,
-      entity: 'Invitation',
-      entityId: id,
-      meta: { businessId: invitation.businessId, type: invitation.type },
+    await this.prisma.$transaction(async (tx) => {
+      await this.close(invitation.id, InvitationStatus.REJECTED, tx);
+      await this.auditService.log(
+        {
+          userId: user.id,
+          action: AuditAction.INVITATION_REJECTED,
+          entity: 'Invitation',
+          entityId: id,
+          meta: { businessId: invitation.businessId, type: invitation.type },
+        },
+        tx,
+      );
     });
 
     return { message: 'Invitación rechazada' };
@@ -431,28 +441,47 @@ export class InvitationsService {
         if (isMember) {
           throw new ConflictException('Ya eres miembro de este negocio');
         }
-        await tx.businessUser.create({
+        const membership = await tx.businessUser.create({
           data: {
             businessId: business.id,
             userId: user.id,
             role: invitation.role!,
           },
         });
+        await this.auditService.log(
+          {
+            userId: user.id,
+            action: AuditAction.BUSINESS_USER_ADDED,
+            entity: 'BusinessUser',
+            entityId: membership.id,
+            meta: {
+              userId: user.id,
+              businessId: business.id,
+              role: membership.role,
+              invitationId: invitation.id,
+              invitedById: invitation.createdById,
+            },
+          },
+          tx,
+        );
       }
-    });
 
-    await this.auditService.log({
-      userId: user.id,
-      action: AuditAction.INVITATION_ACCEPTED,
-      entity: 'Invitation',
-      entityId: invitation.id,
-      meta: {
-        type: invitation.type,
-        businessId: invitation.businessId,
-        // La ficha que quedó vinculada: es la prueba de quién aceptó ver qué.
-        debtorId: invitation.debtorId,
-        role: invitation.role,
-      },
+      await this.auditService.log(
+        {
+          userId: user.id,
+          action: AuditAction.INVITATION_ACCEPTED,
+          entity: 'Invitation',
+          entityId: invitation.id,
+          meta: {
+            type: invitation.type,
+            businessId: invitation.businessId,
+            // La ficha que quedó vinculada: es la prueba de quién aceptó ver qué.
+            debtorId: invitation.debtorId,
+            role: invitation.role,
+          },
+        },
+        tx,
+      );
     });
 
     return {
@@ -544,8 +573,12 @@ export class InvitationsService {
     }
   }
 
-  private async close(id: string, status: InvitationStatus) {
-    await this.prisma.invitation.updateMany({
+  private async close(
+    id: string,
+    status: InvitationStatus,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
+    await db.invitation.updateMany({
       where: { id, status: InvitationStatus.PENDING },
       data: { status, respondedAt: new Date() },
     });

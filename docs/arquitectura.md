@@ -154,7 +154,7 @@ Convenciones que siguen los módulos que mueven plata o permisos:
   - el negocio, al cambiar el equipo, transferirlo, cerrarlo o reabrirlo;
   - el usuario, al crear un negocio, por el tope de 10.
 - **Fiar toma el negocio con `FOR SHARE`**, para que no se fíe en un negocio que se está cerrando.
-- **Auditoría dentro de la transacción.** `AuditService.log(params, tx)` escribe en la misma transacción: si falla, la operación no se aplica. Sin `tx` es de mejor esfuerzo: un fallo solo queda en la consola.
+- **Auditoría dentro de la transacción.** `AuditService.log(params, tx)` escribe en la misma transacción: si falla, la operación no se aplica. Sin `tx` es de mejor esfuerzo: un fallo solo queda en el log del servidor. Solo crear y reenviar una invitación y la descarga del Excel van sin `tx` ([audit](modulos/audit.md#cómo-se-escribe)). Los eventos de seguridad ([auth-log](modulos/auth-log.md)) siempre son de mejor esfuerzo.
 - **Un id de otro negocio responde 404**, igual que uno que no existe: no se confirma que exista en otro lado.
 
 ## Base de datos

@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AuthLogEvent,
   BusinessOwnershipTransfer,
   BusinessUserRole,
   OwnershipTransferStatus,
@@ -17,6 +18,9 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { AuditService } from 'src/audit/audit.service';
 import { AuditAction } from 'src/audit/audit.types';
 import { EmailProvider } from 'src/providers/email.provider';
+import { AuthLogService } from 'src/auth-log/auth-log.service';
+import { AuthLogReason } from 'src/auth-log/auth-log.types';
+import type { RequestContext } from 'src/auth-log/auth-log.types';
 
 /** Días que tiene el miembro para aceptar o rechazar la transferencia. */
 const TRANSFER_EXPIRATION_DAYS = 7;
@@ -54,6 +58,7 @@ export class BusinessOwnershipService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly emailProvider: EmailProvider,
+    private readonly authLog: AuthLogService,
   ) {}
 
   /** El dueño propone pasarle el negocio a uno de sus miembros. */
@@ -62,9 +67,10 @@ export class BusinessOwnershipService {
     ownerId: string,
     toUserId: string,
     password: string,
+    context?: RequestContext,
   ) {
     const business = await this.requireOwnedActiveBusiness(businessId, ownerId);
-    await this.assertPassword(ownerId, password);
+    await this.assertPassword(ownerId, password, context);
 
     if (toUserId === ownerId) {
       throw new BadRequestException('Ya eres el dueño de este negocio');
@@ -141,13 +147,18 @@ export class BusinessOwnershipService {
       throw new NotFoundException('No hay una transferencia pendiente');
     }
 
-    await this.close(transfer, OwnershipTransferStatus.CANCELLED);
-    await this.auditService.log({
-      userId: ownerId,
-      action: AuditAction.BUSINESS_OWNERSHIP_TRANSFER_CANCELLED,
-      entity: 'Business',
-      entityId: businessId,
-      meta: { transferId: transfer.id },
+    await this.prisma.$transaction(async (tx) => {
+      await this.close(transfer, OwnershipTransferStatus.CANCELLED, tx);
+      await this.auditService.log(
+        {
+          userId: ownerId,
+          action: AuditAction.BUSINESS_OWNERSHIP_TRANSFER_CANCELLED,
+          entity: 'Business',
+          entityId: businessId,
+          meta: { transferId: transfer.id },
+        },
+        tx,
+      );
     });
 
     return { message: 'Transferencia cancelada' };
@@ -204,13 +215,18 @@ export class BusinessOwnershipService {
   async rejectTransfer(transferId: string, userId: string) {
     const transfer = await this.requireIncomingPending(transferId, userId);
 
-    await this.close(transfer, OwnershipTransferStatus.REJECTED);
-    await this.auditService.log({
-      userId,
-      action: AuditAction.BUSINESS_OWNERSHIP_TRANSFER_REJECTED,
-      entity: 'Business',
-      entityId: transfer.businessId,
-      meta: { transferId },
+    await this.prisma.$transaction(async (tx) => {
+      await this.close(transfer, OwnershipTransferStatus.REJECTED, tx);
+      await this.auditService.log(
+        {
+          userId,
+          action: AuditAction.BUSINESS_OWNERSHIP_TRANSFER_REJECTED,
+          entity: 'Business',
+          entityId: transfer.businessId,
+          meta: { transferId },
+        },
+        tx,
+      );
     });
 
     await this.notifyOwner(transfer, userId, false);
@@ -363,8 +379,9 @@ export class BusinessOwnershipService {
   private async close(
     transfer: BusinessOwnershipTransfer,
     status: OwnershipTransferStatus,
+    db: Prisma.TransactionClient = this.prisma,
   ) {
-    await this.prisma.businessOwnershipTransfer.updateMany({
+    await db.businessOwnershipTransfer.updateMany({
       where: { id: transfer.id, status: OwnershipTransferStatus.PENDING },
       data: { status, respondedAt: new Date() },
     });
@@ -418,12 +435,22 @@ export class BusinessOwnershipService {
     return business;
   }
 
-  private async assertPassword(userId: string, password: string) {
+  private async assertPassword(
+    userId: string,
+    password: string,
+    context?: RequestContext,
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { password: true },
     });
     if (!user?.password || !(await bcrypt.compare(password, user.password))) {
+      await this.authLog.record({
+        event: AuthLogEvent.PASSWORD_CONFIRM_FAILED,
+        userId,
+        reason: AuthLogReason.TRANSFER_BUSINESS,
+        context,
+      });
       throw new BadRequestException('La contraseña no es correcta');
     }
   }

@@ -55,6 +55,10 @@ export class AccountLifecycleService {
     return this.config.getOrThrow<number>('account.inactiveRetentionMonths');
   }
 
+  private get authLogRetentionMonths(): number {
+    return this.config.getOrThrow<number>('account.authLogRetentionMonths');
+  }
+
   private get closedBusinessRetentionMonths(): number {
     return this.config.getOrThrow<number>(
       'account.closedBusinessRetentionMonths',
@@ -129,7 +133,12 @@ export class AccountLifecycleService {
     password: string,
     context?: RequestContext,
   ): Promise<{ message: string }> {
-    await this.assertPassword(userId, password);
+    await this.assertPassword(
+      userId,
+      password,
+      AuthLogReason.DEACTIVATE_ACCOUNT,
+      context,
+    );
 
     await this.prisma.$transaction([
       this.prisma.user.update({
@@ -166,7 +175,12 @@ export class AccountLifecycleService {
     dto: RequestAccountDeletionDto,
     context?: RequestContext,
   ): Promise<{ message: string; deletionScheduledAt: Date }> {
-    await this.assertPassword(userId, dto.password);
+    await this.assertPassword(
+      userId,
+      dto.password,
+      AuthLogReason.DELETE_ACCOUNT,
+      context,
+    );
 
     // La eliminación nunca se bloquea por tener negocios, pero el dueño debe
     // confirmar que entiende que se cerrarán.
@@ -427,8 +441,18 @@ export class AccountLifecycleService {
       if (await this.purgeBusiness(id)) businessesPurged++;
     }
 
+    // Al final, para que los eventos de esta misma corrida (anonimizaciones)
+    // queden guardados.
+    const authLogLimit = new Date(now);
+    authLogLimit.setUTCMonth(
+      authLogLimit.getUTCMonth() - this.authLogRetentionMonths,
+    );
+    const { count: authLogsDeleted } = await this.prisma.authLog.deleteMany({
+      where: { createdAt: { lt: authLogLimit } },
+    });
+
     this.logger.log(
-      `Mantenimiento de cuentas: ${deletionsProcessed} eliminaciones, ${inactiveAnonymized} cuentas inactivas anonimizadas, ${transfersExpired} transferencias vencidas, ${invitationsExpired} invitaciones vencidas, ${businessesPurged} negocios eliminados`,
+      `Mantenimiento de cuentas: ${deletionsProcessed} eliminaciones, ${inactiveAnonymized} cuentas inactivas anonimizadas, ${transfersExpired} transferencias vencidas, ${invitationsExpired} invitaciones vencidas, ${businessesPurged} negocios eliminados, ${authLogsDeleted} eventos de seguridad vencidos`,
     );
     return {
       deletionsProcessed,
@@ -436,6 +460,7 @@ export class AccountLifecycleService {
       transfersExpired,
       invitationsExpired,
       businessesPurged,
+      authLogsDeleted,
     };
   }
 
@@ -523,9 +548,20 @@ export class AccountLifecycleService {
     return user;
   }
 
-  private async assertPassword(userId: string, password: string) {
+  private async assertPassword(
+    userId: string,
+    password: string,
+    reason: AuthLogReason,
+    context?: RequestContext,
+  ) {
     const user = await this.requireUser(userId);
     if (!user.password || !(await bcrypt.compare(password, user.password))) {
+      await this.authLog.record({
+        event: AuthLogEvent.PASSWORD_CONFIRM_FAILED,
+        userId,
+        reason,
+        context,
+      });
       throw new BadRequestException('La contraseña no es correcta');
     }
   }
