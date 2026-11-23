@@ -7,7 +7,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateDebtDto } from './dto/create-debt.dto';
 import { UpdateDebtStatusDto } from './dto/update-debt-status.dto';
 import { debtSelect } from './debt.select';
-import { DebtStatus, Prisma } from '@prisma/client';
+import { DebtStatus, PaymentType, Prisma } from '@prisma/client';
 import { AuditService } from 'src/audit/audit.service';
 import { AuditAction } from 'src/audit/audit.types';
 import { paginate } from 'src/common/pagination/utils/paginate.util';
@@ -175,7 +175,21 @@ export class DebtsService {
 
       const debt = await tx.debt.findFirst({
         where: { id, businessId },
-        select: { status: true, _count: { select: { payments: true } } },
+        select: {
+          status: true,
+          // Abonos y descuentos que siguen vigentes (sin reverso). Uno ya
+          // reversado no cuenta: su efecto en el saldo quedó en cero.
+          _count: {
+            select: {
+              payments: {
+                where: {
+                  type: { in: [PaymentType.PAYMENT, PaymentType.DISCOUNT] },
+                  reversal: { is: null },
+                },
+              },
+            },
+          },
+        },
       });
       if (!debt) throw new NotFoundException('Deuda no encontrada');
 
@@ -184,7 +198,7 @@ export class DebtsService {
       }
       if (debt.status !== DebtStatus.OPEN || debt._count.payments > 0) {
         throw new BadRequestException(
-          'No puedes anular una deuda con pagos registrados',
+          'No puedes anular una deuda con abonos o descuentos vigentes: reversa primero',
         );
       }
 

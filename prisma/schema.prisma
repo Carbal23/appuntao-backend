@@ -118,6 +118,7 @@ model Payment {
   debtId         String
   businessId     String
   paymentGroupId String?
+  reversedPaymentId String?    @unique
 
   amount         Decimal       @db.Decimal(12, 2)
   paymentDate    DateTime      @default(now())
@@ -132,6 +133,8 @@ model Payment {
   debt           Debt          @relation(fields: [debtId], references: [id])
   business       Business      @relation(fields: [businessId], references: [id])
   paymentGroup   PaymentGroup? @relation(fields: [paymentGroupId], references: [id])
+  reversedPayment Payment?     @relation("PaymentReversal", fields: [reversedPaymentId], references: [id])
+  reversal       Payment?      @relation("PaymentReversal")
 
   @@index([businessId])
   @@index([debtId, businessId])
@@ -354,7 +357,7 @@ enum PaymentMethod {
 
 enum PaymentType {
   PAYMENT
-  ADJUSTMENT
+  DISCOUNT
   REVERSAL
 }
 

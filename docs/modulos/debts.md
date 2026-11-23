@@ -95,7 +95,7 @@ Cada deuda trae `amount` y `balance` (texto decimal, como `"15000.5"`), `currenc
 
 - **Solo se fía a clientes activos.** Un cliente quitado ya no está en la lista del negocio y su cuenta quedó desvinculada; para fiarle hay que registrarlo de nuevo.
 - **El estado sale del saldo.** `PARTIAL` y `PAID` los calcula `payments` al registrar o reversar pagos. A mano solo se puede anular.
-- **Anular solo una deuda `OPEN` sin pagos.** Con pagos hay que reversarlos primero (`payments`). La anulada no se puede pagar ni reactivar.
+- **Anular solo una deuda `OPEN` sin abonos ni descuentos vigentes.** Si tiene, primero se reversan (`POST /payments/:id/reverse`); los ya reversados no cuentan. La anulada no se puede pagar ni reactivar.
 - **La anulada conserva su monto y su saldo** como historial, pero no suma: los saldos (`debtors`, `account-lifecycle`) solo cuentan `OPEN` y `PARTIAL`.
 - **Pago y anulación no se cruzan.** Anular toma el mismo bloqueo de fila (`SELECT … FOR UPDATE`) que `payments` al registrar un pago, así que uno espera al otro.
 - **La moneda es la del negocio** al momento de fiar.
@@ -164,7 +164,7 @@ En las dos, `userId` es quien hizo la acción. `DEBT_CREATED` se escribe despué
 
 | Código | Cuándo |
 | --- | --- |
-| 400 | Monto, descripción o fecha inválidos; vencimiento en el pasado (con `errors.dueDate`); campos no permitidos; `sortBy`, `order` u `overdue` inválidos; fiar a un cliente inactivo; anular con un estado distinto de `CANCELLED`, una deuda ya anulada o con pagos |
+| 400 | Monto, descripción o fecha inválidos; vencimiento en el pasado (con `errors.dueDate`); campos no permitidos; `sortBy`, `order` u `overdue` inválidos; fiar a un cliente inactivo; anular con un estado distinto de `CANCELLED`, una deuda ya anulada o con abonos o descuentos vigentes |
 | 403 | No es miembro del negocio; el cajero intenta anular |
 | 404 | Cliente o deuda inexistente o de otro negocio; deudas de un cliente inactivo |
 
@@ -172,7 +172,7 @@ En las dos, `userId` es quien hizo la acción. `DEBT_CREATED` se escribe despué
 
 - **Decisión (2026-11-22):** a mano solo se puede anular. **Por qué:** marcar `PAID` o `PARTIAL` sin pago dejaba deudas "pagadas" con saldo y sin ningún registro de quién pagó; además `payments` ya no dejaba abonarles.
 - **Decisión (2026-11-22, confirmada con el equipo):** el cajero no anula. **Por qué:** anular borra plata del saldo del cliente sin dejar un pago; queda para el dueño y el administrador, como el reverso de pagos.
-- **Decisión (2026-11-22):** solo se anula una deuda sin pagos. **Por qué:** con pagos, anular escondería plata que sí entró. Primero se reversan los pagos.
+- **Decisión (2026-11-22):** solo se anula una deuda sin abonos ni descuentos vigentes. **Por qué:** con abonos, anular escondería plata que sí entró. Primero se reversan; al principio la regla exigía cero pagos y una deuda con un abono ya reversado no se podía anular nunca (se corrigió en la revisión de `payments`).
 - **Decisión (2026-11-22):** no se editan deudas. **Por qué:** para el MVP, anular y volver a fiar deja el error y la corrección en el historial.
 
 ### En la app
