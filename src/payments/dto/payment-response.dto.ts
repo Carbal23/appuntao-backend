@@ -23,6 +23,24 @@ export class PaymentResponseDto {
   @ApiProperty()
   paymentDate!: Date;
 
+  @ApiProperty({
+    nullable: true,
+    description: 'Pago global al que pertenece; se reversa con el grupo',
+  })
+  paymentGroupId!: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    description: 'En un REVERSAL, el movimiento que deshace',
+  })
+  reversedPaymentId!: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    description: 'Si este movimiento ya fue reversado, su reverso',
+  })
+  reversal!: { id: string; createdAt: Date } | null;
+
   @ApiProperty()
   createdByUser!: {
     id: string;

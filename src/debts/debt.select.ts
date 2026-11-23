@@ -6,6 +6,11 @@ export const paymentSelect = {
   type: true,
   note: true,
   createdAt: true,
+  // Para saber si es parte de un pago global, qué movimiento reversa y si ya
+  // fue reversado (y así ofrecer o no "Reversar").
+  paymentGroupId: true,
+  reversedPaymentId: true,
+  reversal: { select: { id: true, createdAt: true } },
   createdByUser: {
     select: {
       id: true,

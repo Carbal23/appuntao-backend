@@ -24,7 +24,7 @@ Cada módulo tiene su documento con propósito, alcance, endpoints, reglas de ne
 | `business-user` | Equipo del negocio y sus roles | Pendiente |
 | `debtors` | Deudores (clientes) de cada negocio | [debtors.md](modulos/debtors.md) (backend y app revisados) |
 | `debts` | Deudas y su saldo | [debts.md](modulos/debts.md) (backend y app revisados) |
-| `payments` | Pagos, abonos agrupados y reversos | Pendiente |
+| `payments` | Pagos, abonos agrupados y reversos | [payments.md](modulos/payments.md) (backend y app revisados) |
 | `invitations` | Invitaciones a clientes y miembros del equipo | [invitations.md](modulos/invitations.md) (backend probado; falta la app) |
 | `audit` | Registro de auditoría de acciones | Pendiente |
 | `health` | Health check para el despliegue | Pendiente |

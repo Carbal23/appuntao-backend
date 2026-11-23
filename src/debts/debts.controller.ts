@@ -123,7 +123,7 @@ export class DebtsController {
   @ApiOperation({
     summary: 'Anular una deuda',
     description:
-      'Solo acepta status CANCELLED, y solo para una deuda OPEN sin pagos. Dueño o administrador. No se puede deshacer.',
+      'Solo acepta status CANCELLED, y solo para una deuda OPEN sin abonos ni descuentos vigentes (los reversados no cuentan). Dueño o administrador. No se puede deshacer.',
   })
   @ApiResponse({
     status: 200,
@@ -133,7 +133,8 @@ export class DebtsController {
   @ApiResponse({ status: 404, description: 'Deuda no encontrada' })
   @ApiResponse({
     status: 400,
-    description: 'Estado distinto de CANCELLED, ya anulada o con pagos',
+    description:
+      'Estado distinto de CANCELLED, ya anulada o con abonos o descuentos vigentes',
   })
   @ApiResponse({ status: 403, description: 'El cajero no puede anular' })
   updateStatus(

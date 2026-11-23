@@ -28,7 +28,7 @@ const DEBT_STATUSES: Record<DebtStatus, string> = {
 };
 const PAYMENT_TYPES: Record<PaymentType, string> = {
   PAYMENT: 'Abono',
-  ADJUSTMENT: 'Ajuste',
+  DISCOUNT: 'Descuento',
   REVERSAL: 'Reverso',
 };
 const PAYMENT_METHODS: Record<PaymentMethod, string> = {
