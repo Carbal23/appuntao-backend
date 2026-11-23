@@ -59,34 +59,49 @@ export class DebtsService {
       });
     }
 
-    const debt = await this.prisma.debt.create({
-      data: {
-        businessId,
-        debtorId,
-        amount: new Prisma.Decimal(amount),
-        balance: new Prisma.Decimal(amount),
-        currency: debtor.business.currency,
-        description: description || null,
-        dueDate: dueDate ?? null,
-        createdBy: userId,
-      },
-      select: debtSelect,
-    });
+    return this.prisma.$transaction(async (tx) => {
+      // FOR SHARE: no se fía mientras el dueño está cerrando el negocio
+      // (cerrar lo toma con FOR UPDATE); al terminar, ya cerrado, se rechaza.
+      const open = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "Business"
+        WHERE id = ${businessId} AND "inactivatedAt" IS NULL
+        FOR SHARE`;
+      if (open.length === 0) {
+        throw new BadRequestException('El negocio se encuentra inactivado');
+      }
 
-    await this.auditService.log({
-      userId,
-      action: AuditAction.DEBT_CREATED,
-      entity: 'Debt',
-      entityId: debt.id,
-      meta: {
-        amount,
-        debtorId,
-        businessId,
-        dueDate: dueDate?.toISOString() ?? null,
-      },
-    });
+      const debt = await tx.debt.create({
+        data: {
+          businessId,
+          debtorId,
+          amount: new Prisma.Decimal(amount),
+          balance: new Prisma.Decimal(amount),
+          currency: debtor.business.currency,
+          description: description || null,
+          dueDate: dueDate ?? null,
+          createdBy: userId,
+        },
+        select: debtSelect,
+      });
 
-    return debt;
+      await this.auditService.log(
+        {
+          userId,
+          action: AuditAction.DEBT_CREATED,
+          entity: 'Debt',
+          entityId: debt.id,
+          meta: {
+            amount,
+            debtorId,
+            businessId,
+            dueDate: dueDate?.toISOString() ?? null,
+          },
+        },
+        tx,
+      );
+
+      return debt;
+    });
   }
 
   findByBusiness(businessId: string, query: QueryDebtDto) {

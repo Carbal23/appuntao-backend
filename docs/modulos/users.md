@@ -105,6 +105,7 @@ El access token en uso sigue funcionando hasta que venza. Después, el usuario d
 
 ## Permisos y seguridad
 
+- **Las confirmaciones con contraseña tienen límite:** 5 intentos cada 15 minutos por usuario, sumando cambiar la contraseña, desactivar la cuenta, eliminarla y transferir un negocio (`PasswordConfirmThrottlerGuard`, en `src/common/guards/`). Pasado el límite responden 429, aunque la contraseña sea la correcta. Cuenta cada intento, acierte o no. Sin el límite, alguien con la sesión abierta podría probar contraseñas hasta acertar.
 - El registro tiene límite por IP (10 por hora) para evitar la creación masiva de cuentas y usar el registro para averiguar qué datos están registrados.
 - Detrás de un proxy hace falta `TRUST_PROXY=1` para que los límites usen la IP real (ver [auth.md](auth.md#permisos-y-seguridad)).
 

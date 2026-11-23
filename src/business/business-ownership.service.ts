@@ -70,46 +70,55 @@ export class BusinessOwnershipService {
       throw new BadRequestException('Ya eres el dueño de este negocio');
     }
 
-    const membership = await this.prisma.businessUser.findFirst({
-      where: {
-        businessId,
-        userId: toUserId,
-        user: { inactivatedAt: null, anonymizedAt: null },
-      },
-    });
-    if (!membership) {
-      throw new BadRequestException(
-        'Solo puedes transferir el negocio a un miembro activo del negocio',
+    // Con el negocio bloqueado, dos propuestas a la vez no quedan las dos
+    // pendientes: la segunda ve la primera y responde 409.
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockBusiness(tx, business.id);
+
+      const membership = await tx.businessUser.findFirst({
+        where: {
+          businessId,
+          userId: toUserId,
+          user: { inactivatedAt: null, anonymizedAt: null },
+        },
+      });
+      if (!membership) {
+        throw new BadRequestException(
+          'Solo puedes transferir el negocio a un miembro activo del negocio',
+        );
+      }
+
+      if (await this.findPending(businessId, tx)) {
+        throw new ConflictException(
+          'Ya hay una transferencia pendiente para este negocio. Cancélala antes de proponer otra.',
+        );
+      }
+
+      const transfer = await tx.businessOwnershipTransfer.create({
+        data: {
+          businessId,
+          fromUserId: ownerId,
+          toUserId,
+          expiresAt: new Date(
+            Date.now() + TRANSFER_EXPIRATION_DAYS * 24 * 60 * 60 * 1000,
+          ),
+        },
+        include: transferInclude,
+      });
+
+      await this.auditService.log(
+        {
+          userId: ownerId,
+          action: AuditAction.BUSINESS_OWNERSHIP_TRANSFER_REQUESTED,
+          entity: 'Business',
+          entityId: business.id,
+          meta: { transferId: transfer.id, toUserId },
+        },
+        tx,
       );
-    }
 
-    if (await this.findPending(businessId)) {
-      throw new ConflictException(
-        'Ya hay una transferencia pendiente para este negocio. Cancélala antes de proponer otra.',
-      );
-    }
-
-    const transfer = await this.prisma.businessOwnershipTransfer.create({
-      data: {
-        businessId,
-        fromUserId: ownerId,
-        toUserId,
-        expiresAt: new Date(
-          Date.now() + TRANSFER_EXPIRATION_DAYS * 24 * 60 * 60 * 1000,
-        ),
-      },
-      include: transferInclude,
+      return transfer;
     });
-
-    await this.auditService.log({
-      userId: ownerId,
-      action: AuditAction.BUSINESS_OWNERSHIP_TRANSFER_REQUESTED,
-      entity: 'Business',
-      entityId: business.id,
-      meta: { transferId: transfer.id, toUserId },
-    });
-
-    return transfer;
   }
 
   /** Transferencia pendiente de un negocio, visible para el dueño o el destinatario. */
@@ -217,28 +226,24 @@ export class BusinessOwnershipService {
   async acceptTransfer(transferId: string, userId: string) {
     const transfer = await this.requireIncomingPending(transferId, userId);
 
-    const business = await this.prisma.business.findUnique({
-      where: { id: transfer.businessId },
-    });
-    if (!business || business.inactivatedAt) {
-      await this.close(transfer, OwnershipTransferStatus.CANCELLED);
-      throw new BadRequestException('El negocio ya no está activo');
-    }
-    if (business.ownerId !== transfer.fromUserId) {
-      await this.close(transfer, OwnershipTransferStatus.CANCELLED);
-      throw new BadRequestException(
-        'Quien te propuso la transferencia ya no es el dueño del negocio',
-      );
-    }
-    const membership = await this.prisma.businessUser.findUnique({
-      where: { businessId_userId: { businessId: business.id, userId } },
-    });
-    if (!membership) {
-      await this.close(transfer, OwnershipTransferStatus.CANCELLED);
-      throw new BadRequestException('Ya no eres miembro de este negocio');
-    }
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      const business = await this.lockBusiness(tx, transfer.businessId);
+      if (!business || business.inactivatedAt) {
+        return { cancel: 'El negocio ya no está activo' } as const;
+      }
+      if (business.ownerId !== transfer.fromUserId) {
+        return {
+          cancel:
+            'Quien te propuso la transferencia ya no es el dueño del negocio',
+        } as const;
+      }
+      const membership = await tx.businessUser.findUnique({
+        where: { businessId_userId: { businessId: business.id, userId } },
+      });
+      if (!membership) {
+        return { cancel: 'Ya no eres miembro de este negocio' } as const;
+      }
 
-    await this.prisma.$transaction(async (tx) => {
       // La condición de estado impide aceptar dos veces la misma propuesta
       // si llegan dos peticiones a la vez.
       const { count } = await tx.businessOwnershipTransfer.updateMany({
@@ -257,32 +262,40 @@ export class BusinessOwnershipService {
         data: { ownerId: userId },
       });
       await tx.businessUser.update({
-        where: {
-          businessId_userId: { businessId: business.id, userId },
-        },
+        where: { id: membership.id },
         data: { role: BusinessUserRole.OWNER },
       });
       await tx.businessUser.updateMany({
         where: { businessId: business.id, userId: transfer.fromUserId },
         data: { role: BusinessUserRole.ADMIN },
       });
+
+      await this.auditService.log(
+        {
+          userId,
+          action: AuditAction.BUSINESS_OWNERSHIP_TRANSFERRED,
+          entity: 'Business',
+          entityId: business.id,
+          meta: {
+            transferId,
+            previousOwnerId: transfer.fromUserId,
+            newOwnerId: userId,
+          },
+        },
+        tx,
+      );
+
+      return { name: business.name } as const;
     });
 
-    await this.auditService.log({
-      userId,
-      action: AuditAction.BUSINESS_OWNERSHIP_TRANSFERRED,
-      entity: 'Business',
-      entityId: business.id,
-      meta: {
-        transferId,
-        previousOwnerId: transfer.fromUserId,
-        newOwnerId: userId,
-      },
-    });
+    if ('cancel' in outcome) {
+      await this.close(transfer, OwnershipTransferStatus.CANCELLED);
+      throw new BadRequestException(outcome.cancel);
+    }
 
     await this.notifyOwner(transfer, userId, true);
 
-    return { message: `Ahora eres el dueño de ${business.name}` };
+    return { message: `Ahora eres el dueño de ${outcome.name}` };
   }
 
   // ---------------------------------------------------------- utilidades
@@ -333,8 +346,11 @@ export class BusinessOwnershipService {
     }
   }
 
-  private findPending(businessId: string) {
-    return this.prisma.businessOwnershipTransfer.findFirst({
+  private findPending(
+    businessId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
+    return db.businessOwnershipTransfer.findFirst({
       where: {
         businessId,
         status: OwnershipTransferStatus.PENDING,
@@ -369,6 +385,23 @@ export class BusinessOwnershipService {
       throw new BadRequestException('La transferencia venció');
     }
     return transfer;
+  }
+
+  /**
+   * Bloquea la fila del negocio. Cambiar el equipo (`business-user`) toma el
+   * mismo bloqueo, así que una transferencia y un cambio de rol o un retiro
+   * se aplican uno detrás del otro.
+   */
+  private async lockBusiness(tx: Prisma.TransactionClient, businessId: string) {
+    const [business] = await tx.$queryRaw<
+      {
+        id: string;
+        name: string;
+        ownerId: string;
+        inactivatedAt: Date | null;
+      }[]
+    >`SELECT id, name, "ownerId", "inactivatedAt" FROM "Business" WHERE id = ${businessId} FOR UPDATE`;
+    return business ?? null;
   }
 
   private async requireOwnedActiveBusiness(businessId: string, userId: string) {

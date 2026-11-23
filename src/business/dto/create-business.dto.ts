@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsArray,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -8,22 +10,38 @@ import {
   MaxLength,
 } from 'class-validator';
 
+/** La app muestra todo en pesos colombianos: por ahora es la única moneda. */
+export const BUSINESS_CURRENCIES = ['COP'] as const;
+
+const trim = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim() : value;
+
 export class CreateBusinessDto {
   @ApiProperty({ example: 'Mi negocio', maxLength: 100 })
+  @Transform(trim)
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Escribe el nombre del negocio' })
   @MaxLength(100)
   name!: string;
 
-  @ApiProperty({ example: 'Calle 123 #45-67', required: false })
+  @ApiProperty({
+    example: 'Calle 123 #45-67',
+    required: false,
+    nullable: true,
+    description: 'Vacía o null la borra',
+  })
+  // Una dirección vacía se guarda como null.
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() || null : value,
+  )
   @IsOptional()
   @IsString()
   @MaxLength(200)
-  address?: string;
+  address?: string | null;
 
-  @ApiProperty({ example: 'COP', required: false })
+  @ApiProperty({ example: 'COP', required: false, enum: BUSINESS_CURRENCIES })
   @IsOptional()
-  @IsString()
+  @IsIn(BUSINESS_CURRENCIES, { message: 'Por ahora la moneda es COP' })
   currency?: string;
 
   @ApiProperty({

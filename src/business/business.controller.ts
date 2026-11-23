@@ -16,7 +16,7 @@ import { CreateBusinessDto } from './dto/create-business.dto';
 import { UpdateBusinessDto } from './dto/update-business.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
-import { PaginationDto } from 'src/common/pagination/dto/pagination.dto';
+import { QueryBusinessDto } from './dto/query-business.dto';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ApiAuth } from 'src/common/swagger/auth.decorator';
 import { BusinessResponseDto } from './dto/business-response.dto';
@@ -65,7 +65,11 @@ export class BusinessController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Crear un negocio' })
+  @ApiOperation({
+    summary: 'Crear un negocio',
+    description:
+      'Máximo 10 negocios activos como dueño; los cerrados no cuentan.',
+  })
   @ApiResponse({
     status: 201,
     description: 'Negocio creado',
@@ -74,7 +78,7 @@ export class BusinessController {
   @ApiResponse({
     status: 400,
     description:
-      'Error de validación, o no se aceptó la versión vigente de los documentos para negocios',
+      'Error de validación, tope de 10 negocios activos, o no se aceptó la versión vigente de los documentos para negocios',
   })
   @ApiResponse({
     status: 503,
@@ -93,15 +97,25 @@ export class BusinessController {
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 10 })
   @ApiQuery({ name: 'search', required: false, example: 'tienda' })
-  @ApiQuery({ name: 'sortBy', required: false, example: 'createdAt' })
-  @ApiQuery({ name: 'order', required: false, example: 'desc' })
   @ApiResponse({
     status: 200,
     description: 'Listado paginado de negocios',
     type: PaginatedBusinessResponseDto,
   })
-  findAll(@GetUser('id') userId: string, @Query() query: PaginationDto) {
+  findAll(@GetUser('id') userId: string, @Query() query: QueryBusinessDto) {
     return this.businessService.findAllByUser(userId, query);
+  }
+
+  // Va antes de `:id`, si no "closed" se tomaría como un id.
+  @Get('closed')
+  @ApiOperation({
+    summary: 'Negocios cerrados del usuario (como dueño)',
+    description:
+      'Con la fecha en que se eliminan sus datos (`dataDeletionScheduledAt`) y si todavía se pueden reabrir (`canReactivate`). Hasta esa fecha el dueño puede descargarlos con GET /business/:id/export.',
+  })
+  @ApiResponse({ status: 200, description: 'Lista de negocios cerrados' })
+  findClosed(@GetUser('id') userId: string) {
+    return this.businessService.findClosedByOwner(userId);
   }
 
   @Get(':id')
@@ -164,5 +178,22 @@ export class BusinessController {
   })
   inactivate(@Param('id') id: string, @GetUser('id') userId: string) {
     return this.businessService.inactivate(id, userId);
+  }
+
+  @Patch(':id/reactivate')
+  @ApiOperation({
+    summary: 'Reabrir un negocio cerrado (solo el dueño)',
+    description:
+      'Vale mientras sus datos no se hayan eliminado. Vuelven sus clientes, deudas y equipo. Cuenta para el tope de 10 negocios activos.',
+  })
+  @ApiResponse({ status: 200, type: BusinessResponseDto })
+  @ApiResponse({ status: 403, description: 'No es el dueño' })
+  @ApiResponse({ status: 404, description: 'Negocio no encontrado' })
+  @ApiResponse({
+    status: 400,
+    description: 'Ya está activo, venció el plazo o llegó al tope',
+  })
+  reactivate(@Param('id') id: string, @GetUser('id') userId: string) {
+    return this.businessService.reactivate(id, userId);
   }
 }

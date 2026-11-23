@@ -22,6 +22,10 @@ import {
   DeletionPreviewDto,
   RequestAccountDeletionDto,
 } from 'src/account-lifecycle/dto/account-lifecycle.dto';
+import {
+  PasswordConfirmLimit,
+  PasswordConfirmThrottlerGuard,
+} from 'src/common/guards/password-confirm-throttler.guard';
 
 @ApiTags('Users')
 @Controller('users')
@@ -84,9 +88,14 @@ export class UsersController {
     return this.usersService.findOne(id, actor);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PasswordConfirmThrottlerGuard)
+  @PasswordConfirmLimit()
   @ApiAuth()
   @Patch('me/password')
+  @ApiResponse({
+    status: 429,
+    description: 'Más de 5 intentos con contraseña en 15 minutos',
+  })
   @ApiOperation({
     summary: 'Cambiar la contraseña del usuario autenticado',
     description:
@@ -130,9 +139,14 @@ export class UsersController {
     return this.usersService.update(id, data, actor);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PasswordConfirmThrottlerGuard)
+  @PasswordConfirmLimit()
   @ApiAuth()
   @Post('me/deactivate')
+  @ApiResponse({
+    status: 429,
+    description: 'Más de 5 intentos con contraseña en 15 minutos',
+  })
   @ApiOperation({
     summary: 'Desactivar la propia cuenta (reversible)',
     description:
@@ -161,9 +175,14 @@ export class UsersController {
     return this.accountLifecycle.getDeletionPreview(userId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PasswordConfirmThrottlerGuard)
+  @PasswordConfirmLimit()
   @ApiAuth()
   @Post('me/deletion')
+  @ApiResponse({
+    status: 429,
+    description: 'Más de 5 intentos con contraseña en 15 minutos',
+  })
   @ApiOperation({
     summary: 'Solicitar la eliminación de la propia cuenta',
     description:
