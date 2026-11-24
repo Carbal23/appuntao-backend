@@ -11,6 +11,9 @@ import { LoginThrottlerGuard } from './guards/login-throttler.guard';
 import { AuthLogModule } from 'src/auth-log/auth-log.module';
 import { LegalModule } from 'src/legal/legal.module';
 import { AccountLifecycleModule } from 'src/account-lifecycle/account-lifecycle.module';
+import { EmailProvider } from 'src/providers/email.provider';
+import { PasswordResetService } from './password-reset.service';
+import { PasswordResetThrottlerGuard } from './guards/password-reset-throttler.guard';
 
 @Global()
 @Module({
@@ -37,7 +40,14 @@ import { AccountLifecycleModule } from 'src/account-lifecycle/account-lifecycle.
     LegalModule,
     AccountLifecycleModule,
   ],
-  providers: [AuthService, JwtStrategy, LoginThrottlerGuard],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    LoginThrottlerGuard,
+    PasswordResetService,
+    PasswordResetThrottlerGuard,
+    EmailProvider,
+  ],
   controllers: [AuthController],
   exports: [AuthService],
 })

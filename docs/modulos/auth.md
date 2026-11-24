@@ -15,13 +15,14 @@ Autentica a los usuarios y mantiene sus sesiones: emite el access token (JWT) y 
 - Bloqueo temporal tras varios intentos fallidos de login.
 - Reactivar la cuenta desde el login, si la desactivó el propio usuario.
 - Devolver en login y refresh los documentos legales pendientes de aceptar.
+- Recuperar la contraseña olvidada con un código que llega al correo.
 - Guards y decorators de autorización (ver [arquitectura.md](../arquitectura.md#autenticación-y-autorización)).
 
 **No hace:**
 - Registro de usuarios ni cambio de contraseña: está en [`users`](users.md).
 - Desactivar o eliminar cuentas: está en `account-lifecycle` ([account-lifecycle.md](account-lifecycle.md)).
 - Guardar los eventos de seguridad: lo hace `auth-log`, al que este módulo le reporta.
-- Recuperar la contraseña olvidada: todavía no existe.
+- Verificar el correo al registrarse: todavía no existe (ver [Decisiones y pendientes](#decisiones-y-pendientes)).
 
 ## Modelos
 
@@ -29,6 +30,7 @@ Autentica a los usuarios y mantiene sus sesiones: emite el access token (JWT) y 
 | --- | --- |
 | `User` | Credenciales, rol de plataforma y estado de la cuenta |
 | `RefreshToken` | Sesiones: hash del token, familia, dispositivo, vencimiento y rotación |
+| `PasswordReset` | Códigos para recuperar la contraseña: HMAC del código, vencimiento, intentos fallidos y cuándo se usó |
 | `AuthLog` | Eventos de seguridad (a través de `AuthLogService`) |
 
 ## Endpoints
@@ -40,6 +42,9 @@ Ninguno exige access token.
 | `POST` | `/api/auth/login` | Body: `identifier`, `password`, `deviceId`, `deviceName?`, `reactivate?` | Inicia sesión. Límite: 5 intentos por minuto por IP + identificador |
 | `POST` | `/api/auth/refresh` | Headers: `x-refresh-token`, `x-device-id?` | Entrega tokens nuevos e invalida el refresh token usado |
 | `POST` | `/api/auth/logout` | Header: `x-refresh-token`. Body: `allDevices?` | Cierra la sesión del dispositivo o, con `allDevices: true`, todas |
+| `POST` | `/api/auth/password/forgot` | Body: `email` | Envía un código de 6 dígitos al correo, si es de una cuenta. Responde 200 igual exista o no |
+| `POST` | `/api/auth/password/verify-code` | Body: `email`, `code` | Dice si el código sirve (`{ valid: true }`), sin cambiar nada. Cuenta como intento |
+| `POST` | `/api/auth/password/reset` | Body: `email`, `code`, `newPassword` | Cambia la contraseña y cierra todas las sesiones. No inicia sesión |
 
 Login y refresh responden lo mismo:
 
@@ -118,6 +123,39 @@ El cliente **debe guardar el refresh token nuevo** en cada respuesta; el anterio
 
 Los access tokens ya emitidos siguen siendo válidos hasta que venzan; el logout invalida la posibilidad de renovarlos.
 
+### Recuperar la contraseña
+
+Lo hace `PasswordResetService` ([password-reset.service.ts](../../src/auth/password-reset.service.ts)).
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant API
+    participant DB
+    participant Resend
+    App->>API: POST /auth/password/forgot { email }
+    API-->>App: 200 "Si el correo está registrado, te enviamos un código"
+    API->>DB: (en segundo plano) buscar cuenta, anular códigos anteriores, crear PasswordReset
+    API->>Resend: correo con el código
+    App->>API: POST /auth/password/verify-code { email, code }
+    API-->>App: 200 { valid: true } o 400
+    App->>API: POST /auth/password/reset { email, code, newPassword }
+    API->>DB: transacción: usedAt, nueva contraseña, borrar RefreshToken
+    API->>Resend: aviso "tu contraseña se cambió"
+    API-->>App: 200, la app lleva al login
+```
+
+1. **Pedir el código** (`forgot`). Responde **de inmediato y siempre lo mismo**; el trabajo se hace después de responder. Así ni el mensaje ni el tiempo de respuesta delatan si el correo tiene cuenta. Solo se crea un código si:
+   - hay una cuenta con ese correo que no está anonimizada;
+   - la cuenta no la desactivó un administrador (`DISABLED`). Si la desactivó el propio usuario o pidió eliminarla, sí se puede: después del cambio, el login le ofrece reactivarla;
+   - pasó al menos **1 minuto** desde el último código de esa cuenta;
+   - la cuenta pidió menos de **5 códigos en 24 horas**. Al llegar al tope se registra `PASSWORD_RESET_BLOCKED` (`DAILY_LIMIT`).
+2. **El código** tiene 6 dígitos (`crypto.randomInt`), vence a los **15 minutos** y se guarda como HMAC-SHA256 con una clave derivada de `JWT_SECRET`, nunca en claro. Pedir uno nuevo anula los anteriores: solo sirve el último que llegó.
+3. **Comprobar el código** (`verify-code` y `reset`). Cada código admite **5 intentos fallidos**. El intento se descuenta antes de comparar, para que varias peticiones a la vez no se pasen del límite, y se devuelve si el código es correcto: pasar por `verify-code` y luego por `reset` no gasta intentos. Todos los fallos responden el mismo 400 ("El código no es válido o ya venció…"), sea código equivocado, vencido, agotado o correo sin cuenta.
+4. **Cambiar la contraseña** (`reset`). `newPassword` sigue las mismas reglas que en el registro. En una transacción se marca el código como usado (solo una petición puede usarlo), se guarda la contraseña nueva y se borran **todos** los refresh tokens de la cuenta. Después se envía un aviso al correo. No devuelve tokens: la app lleva al login.
+
+El código se escribe en la app; no hay enlace, porque no existe un frontend web. Los correos se mandan con Resend ([arquitectura](../arquitectura.md)). Si el envío falla, queda en el log del servidor y la respuesta no cambia.
+
 ## Permisos y seguridad
 
 - Contraseñas con **bcrypt** (10 rondas). Los refresh tokens nunca se guardan en claro.
@@ -125,7 +163,8 @@ Los access tokens ya emitidos siguen siendo válidos hasta que venzan; el logout
 - **Mismo tiempo de respuesta exista o no la cuenta.** Si el identificador no corresponde a nadie, se compara la contraseña contra un hash de relleno con el mismo costo. Antes esa respuesta era más rápida y delataba qué correos, teléfonos o documentos están registrados.
 - El contador del límite vive **en memoria** de cada instancia: se reinicia al reiniciar el servidor y no se comparte entre instancias.
 - Detrás de un proxy (Render) hay que definir `TRUST_PROXY=1`. Sin eso, todas las peticiones parecen venir de la IP del proxy y el límite se aplica a todos los usuarios a la vez.
-- `JWT_SECRET` debe tener al menos 32 caracteres o la aplicación no arranca.
+- `JWT_SECRET` debe tener al menos 32 caracteres o la aplicación no arranca. Cambiarlo anula también los códigos de recuperación vigentes, porque su clave sale de ahí.
+- **Límite de recuperar la contraseña** (`PasswordResetThrottlerGuard`), por IP + correo normalizado: 3 solicitudes de código cada 15 minutos, y 10 intentos con código cada 15 minutos, contando juntos `verify-code` y `reset`. Al pasarse responde 429. Lo que no se esquiva cambiando de IP lo cuenta la base de datos: 5 intentos por código y 5 códigos al día por cuenta.
 
 ## Eventos que registra en `auth-log`
 
@@ -134,10 +173,14 @@ Los access tokens ya emitidos siguen siendo válidos hasta que venzan; el logout
 | `LOGIN_SUCCESS` | Login correcto |
 | `LOGIN_FAILED` | Credenciales inválidas (`INVALID_CREDENTIALS`), identificador ambiguo (`AMBIGUOUS_IDENTIFIER`) o cuenta no activa (`ACCOUNT_*`) |
 | `LOGIN_BLOCKED` | Se superó el límite de intentos |
-
-Lo que se escribió en `identifier` se guarda solo si corresponde a una cuenta, o si es un correo o solo dígitos; si no, queda como `(otro)`, para no guardar una contraseña escrita en el campo equivocado. Detalle en [auth-log](auth-log.md#qué-se-guarda-del-identificador).
 | `REFRESH_TOKEN_REUSED` | Se reutilizó un refresh token ya rotado (fuera del margen de 30 s) |
 | `LOGOUT` / `LOGOUT_ALL_DEVICES` | Cierre de sesión |
+| `PASSWORD_RESET_REQUESTED` | Se creó y envió un código de recuperación |
+| `PASSWORD_RESET_FAILED` | Código equivocado (`INVALID_CODE`), sin código vigente o correo sin cuenta (`NO_ACTIVE_CODE`), o código agotado (`TOO_MANY_ATTEMPTS`) |
+| `PASSWORD_RESET_BLOCKED` | El código llegó a 5 fallos (`TOO_MANY_ATTEMPTS`) o la cuenta llegó a 5 códigos en 24 horas (`DAILY_LIMIT`) |
+| `PASSWORD_RESET_COMPLETED` | Se cambió la contraseña con un código |
+
+Lo que se escribió en `identifier` se guarda solo si corresponde a una cuenta, o si es un correo o solo dígitos; si no, queda como `(otro)`, para no guardar una contraseña escrita en el campo equivocado. Detalle en [auth-log](auth-log.md#qué-se-guarda-del-identificador). En los eventos `PASSWORD_RESET_*` el `identifier` es el correo.
 
 ## Integraciones
 
@@ -147,22 +190,29 @@ Lo que se escribió en `identifier` se guarda solo si corresponde a una cuenta, 
 | `legal` | Calcular `pendingLegalDocuments` |
 | `account-lifecycle` | Estado de la cuenta en el login y reactivación |
 | `users` | `serializeUser` y `userSafeSelect`, para no devolver la contraseña ni estados internos |
+| `EmailProvider` (Resend) | Código de recuperación y aviso de contraseña cambiada |
+| `account-lifecycle` (tarea diaria) | Borra los `PasswordReset` de más de 7 días y los de una cuenta al anonimizarla |
 
 ## Errores
 
 | Código | Cuándo |
 | --- | --- |
-| 400 | Falta `x-refresh-token` en refresh o logout; body inválido |
+| 400 | Falta `x-refresh-token` en refresh o logout; body inválido; código de recuperación inválido, vencido o agotado |
 | 401 | Credenciales inválidas, identificador ambiguo, refresh token inválido, vencido, de otro dispositivo o reutilizado; usuario inactivado |
 | 403 | Cuenta no activa: `ACCOUNT_DISABLED`, `ACCOUNT_DEACTIVATED`, `ACCOUNT_DELETION_PENDING` (este último incluye `deletionScheduledAt`) |
-| 429 | Demasiados intentos de login |
+| 429 | Demasiados intentos de login o de recuperar la contraseña |
 
 ## Decisiones y pendientes
 
 - **Decisión:** el refresh token lleva el `userId` como prefijo. **Por qué:** permite comprobar que el token pertenece a ese usuario sin depender solo del hash.
 - **Decisión:** margen de 30 s para la reutilización. **Por qué:** sin él, dos refresh simultáneos del mismo cliente cerraban la sesión como si fuera un robo.
 - **Decisión:** el estado de la cuenta se informa solo con la contraseña correcta. **Por qué:** no revelar si una cuenta existe o está desactivada.
-- **Pendiente:** recuperación de contraseña.
+- **Decisión (2026-11-24):** recuperar la contraseña con un **código de 6 dígitos al correo**, no con un enlace. **Por qué:** no hay frontend web donde abrir un enlace, y el código encaja con las invitaciones, que ya funcionan así.
+- **Decisión:** solo por correo, no por teléfono ni documento. **Por qué:** el correo es obligatorio al registrarse y es a donde se envía. Aceptar otro dato obligaba a mostrar el correo enmascarado. No hay SMS: no existe proveedor. Una cuenta sin correo tiene que pasar por soporte.
+- **Decisión:** `forgot` responde antes de hacer el trabajo, y `reset` no inicia sesión. **Por qué:** lo primero evita que el tiempo de respuesta delate qué correos tienen cuenta; lo segundo deja una sola forma de entrar (el login), que ya revisa el estado de la cuenta y los documentos legales.
+- **Decisión:** la clave del HMAC del código sale de `JWT_SECRET`. **Por qué:** es una variable menos que configurar en cada entorno, y sin la clave una copia de la base no basta para probar el millón de códigos posibles.
+- **Pendiente (riesgo aceptado para el MVP):** el correo **no se verifica** al registrarse. Si alguien se registró con un correo ajeno, el dueño real de ese correo puede quedarse con la cuenta usando la recuperación. La solución es verificar el correo al registrarse (o al cambiarlo).
+- **Pendiente:** si el remitente es `onboarding@resend.dev` (el de prueba de Resend), los correos solo llegan al dueño de la cuenta de Resend. Para que la recuperación funcione con usuarios reales, `EMAIL_FROM` debe usar un dominio verificado.
 - **Pendiente:** el límite es por IP + identificador; no hay bloqueo por cuenta. Alguien con muchas IP podría probar contraseñas de una misma cuenta. Para el MVP se acepta.
 - **Decisión (2026-11-22):** `JWT_EXPIRES_IN` es `1d` en development, a propósito: el backend corre en el plan gratuito de Render y así la app hace menos renovaciones. **En production debe ser de 15 a 30 minutos** (`15m` o `30m`), para que un token robado, una sesión cerrada o una contraseña cambiada dejen de servir pronto. Revisarlo al configurar el entorno de production (ver [despliegue.md](../despliegue.md)).
 - **Pendiente:** si se despliegan varias instancias, mover el almacenamiento del límite de login a un store compartido (por ejemplo Redis).

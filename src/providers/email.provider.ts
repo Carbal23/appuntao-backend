@@ -101,6 +101,75 @@ export class EmailProvider {
     });
   }
 
+  /* ── Contraseña ───────────────────────────────────────────────────────── */
+
+  async sendPasswordResetCode(
+    to: string,
+    code: string,
+    expiresInMinutes: number,
+  ) {
+    const html = this.renderInvitation({
+      heading: 'Cambia tu contrase&ntilde;a',
+      intro:
+        'Recibimos una solicitud para cambiar la contrase&ntilde;a de tu cuenta de Appuntao. Escribe este c&oacute;digo en la app.',
+      code,
+      steps: [
+        'En la app, escribe el c&oacute;digo de arriba.',
+        'Elige tu nueva contrase&ntilde;a.',
+        'Inicia sesi&oacute;n con la nueva contrase&ntilde;a.',
+      ],
+      footnote: `El c&oacute;digo vence en ${expiresInMinutes} minutos y solo sirve una vez. <strong>No se lo compartas a nadie</strong>: Appuntao nunca te lo va a pedir. Si no fuiste t&uacute;, ignora este correo; tu contrase&ntilde;a no cambia.`,
+    });
+
+    const text = [
+      'Cambia tu contraseña',
+      '',
+      'Recibimos una solicitud para cambiar la contraseña de tu cuenta de Appuntao. Escribe este código en la app.',
+      '',
+      `Tu código: ${code}`,
+      '',
+      `El código vence en ${expiresInMinutes} minutos y solo sirve una vez. No se lo compartas a nadie: Appuntao nunca te lo va a pedir.`,
+      'Si no fuiste tú, ignora este correo; tu contraseña no cambia.',
+      '',
+      'Appuntao · Lleva el control de tus fiados',
+    ].join('\n');
+
+    return this.resend.emails.send({
+      from: this.from,
+      to,
+      subject: `${code} es tu código para cambiar la contraseña de Appuntao`,
+      html,
+      text,
+    });
+  }
+
+  /** Aviso de que la contraseña se cambió con un código del correo. */
+  async sendPasswordChangedNotice(to: string) {
+    const heading = 'Tu contraseña se cambió';
+    const intro =
+      'La contrase&ntilde;a de tu cuenta de Appuntao se cambi&oacute; con un c&oacute;digo enviado a este correo, y se cerraron las sesiones abiertas. Si fuiste t&uacute;, no tienes que hacer nada. <strong>Si no fuiste t&uacute;</strong>, cambia tu contrase&ntilde;a desde &laquo;&iquest;Olvidaste tu contrase&ntilde;a?&raquo; y revisa la seguridad de tu correo.';
+
+    return this.resend.emails.send({
+      from: this.from,
+      to,
+      subject: 'Tu contraseña de Appuntao se cambió',
+      html: this.renderNotice({
+        heading: 'Tu contrase&ntilde;a se cambi&oacute;',
+        intro,
+        footer:
+          'Recibes este correo por la seguridad de tu cuenta de Appuntao.',
+      }),
+      text: [
+        heading,
+        '',
+        'La contraseña de tu cuenta de Appuntao se cambió con un código enviado a este correo, y se cerraron las sesiones abiertas.',
+        'Si fuiste tú, no tienes que hacer nada. Si no fuiste tú, cambia tu contraseña desde "¿Olvidaste tu contraseña?" y revisa la seguridad de tu correo.',
+        '',
+        'Appuntao',
+      ].join('\n'),
+    });
+  }
+
   /* ── Plantilla ────────────────────────────────────────────────────────── */
 
   /** Cabecera de marca: logo alojado si hay `LOGO_URL`, si no, el wordmark. */
@@ -117,7 +186,9 @@ export class EmailProvider {
     code: string;
     steps: string[];
     badge?: string;
-    expiresInDays: number;
+    expiresInDays?: number;
+    /** Reemplaza la nota de vencimiento de las invitaciones. */
+    footnote?: string;
   }): string {
     const badge = opts.badge
       ? `<span style="display:inline-block;background-color:#E6F7EF;color:${this.brand};font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.3px;padding:6px 12px;border-radius:999px;">${opts.badge}</span>`
@@ -178,7 +249,7 @@ export class EmailProvider {
             </tr>
             <tr>
               <td style="padding:12px 32px 28px 32px;">
-                <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:${this.muted};">La invitación vence en ${opts.expiresInDays} días. Si no esperabas esta invitación, puedes ignorar este correo.</p>
+                <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:${this.muted};">${opts.footnote ?? `La invitación vence en ${opts.expiresInDays} días. Si no esperabas esta invitación, puedes ignorar este correo.`}</p>
               </td>
             </tr>
             <tr>
@@ -245,13 +316,22 @@ export class EmailProvider {
       from: this.from,
       to,
       subject: heading,
-      html: this.renderNotice({ heading: escapeHtml(heading), intro }),
+      html: this.renderNotice({
+        heading: escapeHtml(heading),
+        intro,
+        footer:
+          'Recibes este correo porque propusiste pasar un negocio en Appuntao.',
+      }),
       text: [heading, '', introText, '', 'Appuntao'].join('\n'),
     });
   }
 
   /** Correo informativo, sin código: misma cabecera y pie que las invitaciones. */
-  private renderNotice(opts: { heading: string; intro: string }): string {
+  private renderNotice(opts: {
+    heading: string;
+    intro: string;
+    footer: string;
+  }): string {
     return `<!doctype html>
 <html lang="es">
   <head>
@@ -277,7 +357,7 @@ export class EmailProvider {
             </tr>
             <tr>
               <td style="padding:20px 32px;border-top:1px solid #EEF1F4;text-align:center;">
-                <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#9AA4AE;">Recibes este correo porque propusiste pasar un negocio en Appuntao.</p>
+                <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#9AA4AE;">${opts.footer}</p>
               </td>
             </tr>
           </table>

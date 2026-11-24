@@ -18,7 +18,7 @@ Registro y gestión de las cuentas de usuario: crear la cuenta con su aceptació
 **No hace:**
 - Login ni sesiones: [`auth`](auth.md).
 - Publicar o aceptar documentos legales después del registro: [`legal`](legal.md).
-- Recuperar la contraseña olvidada: todavía no existe.
+- Recuperar la contraseña olvidada: está en [`auth`](auth.md#recuperar-la-contraseña).
 - Buscar a otras personas por su correo, teléfono o documento: se quitó (ver [Decisiones](#decisiones-y-pendientes)). Para sumar a alguien a un negocio se usa [`invitations`](invitations.md).
 
 ## Modelos

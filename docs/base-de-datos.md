@@ -15,7 +15,8 @@ Resumen de cada modelo de `prisma/schema.prisma`. El detalle de cómo los usa ca
 | `PaymentGroup` | Agrupa los pagos de un mismo abono repartido entre varias deudas de un deudor. `reversedAt` marca si se reversó |
 | `Invitation` | Invitación a un cliente (`DEBTOR`) o a un miembro del equipo (`BUSINESS_USER`, con su rol), dirigida a un correo o teléfono, con código único, vencimiento, estado (`PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`, `EXPIRED`), quién la creó y quién la aceptó |
 | `RefreshToken` | Refresh tokens guardados como hash, agrupados por familia (rotación) y asociados a un dispositivo |
-| `AuthLog` | Eventos de seguridad: logins, bloqueos, logouts, contraseñas (cambios, confirmaciones fallidas, bloqueos), reutilización de refresh tokens y eventos del ciclo de vida de la cuenta. Se borran a los 12 meses. Ver [auth-log](modulos/auth-log.md) |
+| `PasswordReset` | Códigos para recuperar la contraseña: HMAC del código (nunca en claro), vencimiento, intentos fallidos (`attempts`), cuándo se usó (`usedAt`) e IP de quien lo pidió. Se borran a los 7 días. Ver [auth](modulos/auth.md#recuperar-la-contraseña) |
+| `AuthLog` | Eventos de seguridad: logins, bloqueos, logouts, contraseñas (cambios, confirmaciones fallidas, bloqueos, recuperación), reutilización de refresh tokens y eventos del ciclo de vida de la cuenta. Se borran a los 12 meses. Ver [auth-log](modulos/auth-log.md) |
 | `AuditLog` | Auditoría de acciones: quién hizo qué, sobre qué entidad y con qué datos. Vive mientras exista el negocio. Ver [audit](modulos/audit.md) |
 | `LegalDocumentKind` | Catálogo de tipos de documento legal: a quién se le exige, si es obligatorio y su título. Ver [legal](modulos/legal.md) |
 | `LegalDocument` | Cada versión publicada de un documento legal, con su texto y su huella SHA-256 |

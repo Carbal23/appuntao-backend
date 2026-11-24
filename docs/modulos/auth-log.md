@@ -55,6 +55,10 @@ Es de **mejor esfuerzo**: si no se puede escribir, queda en el log del servidor 
 | `PASSWORD_CHANGED` / `PASSWORD_CHANGE_FAILED` | users | Cambio de contraseña, o contraseña actual equivocada | — / `WRONG_CURRENT_PASSWORD` |
 | `PASSWORD_CONFIRM_FAILED` | account-lifecycle, business | Contraseña equivocada al confirmar una acción | `DEACTIVATE_ACCOUNT`, `DELETE_ACCOUNT`, `TRANSFER_BUSINESS` |
 | `PASSWORD_CONFIRM_BLOCKED` | `PasswordConfirmThrottlerGuard` | Más de 5 intentos con contraseña en 15 minutos (uno por bloqueo) | La acción que se intentaba, incluida `CHANGE_PASSWORD` |
+| `PASSWORD_RESET_REQUESTED` | auth (`PasswordResetService`) | Se creó y envió un código para recuperar la contraseña | — |
+| `PASSWORD_RESET_FAILED` | auth (`PasswordResetService`) | Código de recuperación rechazado | `INVALID_CODE`, `NO_ACTIVE_CODE` (no hay código vigente o el correo no es de una cuenta), `TOO_MANY_ATTEMPTS` |
+| `PASSWORD_RESET_BLOCKED` | auth (`PasswordResetService`) | Un código llegó a 5 fallos, o la cuenta a 5 códigos en 24 horas | `TOO_MANY_ATTEMPTS` / `DAILY_LIMIT` |
+| `PASSWORD_RESET_COMPLETED` | auth (`PasswordResetService`) | Se cambió la contraseña con un código | — |
 | `ACCOUNT_DEACTIVATED` / `ACCOUNT_REACTIVATED` | account-lifecycle | Desactivar o reactivar la cuenta | `BY_ADMIN` si fue un administrador |
 | `ACCOUNT_DELETION_REQUESTED` / `_CANCELLED` | account-lifecycle | Pedir o cancelar la eliminación | `BUSINESS_CLOSURE_ACKNOWLEDGED` si aceptó cerrar sus negocios |
 | `ACCOUNT_ANONYMIZED` | account-lifecycle | Se borraron los datos de la cuenta | `DELETION_REQUESTED` o `INACTIVE_RETENTION_EXPIRED` |
