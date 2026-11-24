@@ -165,7 +165,7 @@ Convenciones que siguen los módulos que mueven plata o permisos:
 
 | Proveedor | Archivo | Uso |
 | --- | --- | --- |
-| Resend | `src/providers/email.provider.ts` | Correos de invitación y aviso al dueño de la respuesta a una transferencia (HTML con tablas y estilos en línea, más versión en texto plano). Variables `RESEND_API_KEY`, `EMAIL_FROM`, `LOGO_URL` |
+| Resend | `src/providers/email.provider.ts` | Correos de invitación, aviso al dueño de la respuesta a una transferencia, código para recuperar la contraseña y aviso de contraseña cambiada (HTML con tablas y estilos en línea, más versión en texto plano). Variables `RESEND_API_KEY`, `EMAIL_FROM`, `LOGO_URL` |
 
 ## Tareas programadas
 

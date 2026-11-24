@@ -31,6 +31,7 @@ model User {
   debtors         Debtor[]       @relation("UserDebtors")
   createdPayments Payment[]      @relation("UserCreatedPayments")
   refreshTokens   RefreshToken[]
+  passwordResets  PasswordReset[]
   authLogs        AuthLog[]
   consents        UserConsent[]
   invitationsCreated  Invitation[] @relation("InvitationsCreated")
@@ -215,6 +216,20 @@ model RefreshToken {
   @@index([userId, deviceId])
 }
 
+model PasswordReset {
+  id        String    @id @default(uuid())
+  userId    String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int       @default(0)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  ipAddress String?
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
 model AuthLog {
   id         String       @id @default(uuid())
   userId     String? 
@@ -249,6 +264,10 @@ enum AuthLogEvent {
   ACCOUNT_ANONYMIZED
   PASSWORD_CONFIRM_FAILED
   PASSWORD_CONFIRM_BLOCKED
+  PASSWORD_RESET_REQUESTED
+  PASSWORD_RESET_FAILED
+  PASSWORD_RESET_BLOCKED
+  PASSWORD_RESET_COMPLETED
 }
 
 enum InactivationSource {

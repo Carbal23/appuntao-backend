@@ -5,6 +5,8 @@ import {
   Headers,
   BadRequestException,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -20,11 +22,25 @@ import { LogoutDto } from './dto/logout.dto';
 import { LoginThrottlerGuard } from './guards/login-throttler.guard';
 import { ReqContext } from 'src/common/decorators/request-context.decorator';
 import type { RequestContext } from 'src/auth-log/auth-log.types';
+import { PasswordResetService } from './password-reset.service';
+import {
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  VerifyResetCodeDto,
+} from './dto/password-reset.dto';
+import {
+  PasswordResetCodeLimit,
+  PasswordResetRequestLimit,
+  PasswordResetThrottlerGuard,
+} from './guards/password-reset-throttler.guard';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly passwordReset: PasswordResetService,
+  ) {}
 
   @Post('login')
   @UseGuards(LoginThrottlerGuard)
@@ -113,5 +129,61 @@ export class AuthController {
     body?: LogoutDto,
   ) {
     return this.authService.logout(refreshToken, !!body?.allDevices, context);
+  }
+
+  @Post('password/forgot')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(PasswordResetThrottlerGuard)
+  @PasswordResetRequestLimit()
+  @ApiOperation({
+    summary: 'Pedir un código para cambiar la contraseña olvidada',
+    description:
+      'Si el correo es de una cuenta, le envía un código de 6 dígitos que vence en 15 minutos. Responde lo mismo exista o no la cuenta. Pedir un código nuevo anula el anterior. Como mucho uno por minuto y 5 al día por cuenta.',
+  })
+  @ApiResponse({ status: 200, description: 'Solicitud recibida' })
+  @ApiResponse({ status: 429, description: 'Demasiadas solicitudes' })
+  forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+    @ReqContext() context: RequestContext,
+  ) {
+    return this.passwordReset.forgot(dto.email, context);
+  }
+
+  @Post('password/verify-code')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(PasswordResetThrottlerGuard)
+  @PasswordResetCodeLimit()
+  @ApiOperation({
+    summary: 'Comprobar el código antes de pedir la nueva contraseña',
+    description:
+      'No cambia nada; sirve para que la app pase a la pantalla de la nueva contraseña. Un fallo cuenta como intento: cada código admite 5.',
+  })
+  @ApiResponse({ status: 200, description: '{ valid: true }' })
+  @ApiResponse({ status: 400, description: 'Código inválido o vencido' })
+  @ApiResponse({ status: 429, description: 'Demasiados intentos' })
+  verifyResetCode(
+    @Body() dto: VerifyResetCodeDto,
+    @ReqContext() context: RequestContext,
+  ) {
+    return this.passwordReset.verifyCode(dto, context);
+  }
+
+  @Post('password/reset')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(PasswordResetThrottlerGuard)
+  @PasswordResetCodeLimit()
+  @ApiOperation({
+    summary: 'Cambiar la contraseña olvidada con el código',
+    description:
+      'Cambia la contraseña, cierra todas las sesiones de la cuenta y envía un aviso al correo. No inicia sesión: la app debe llevar al login.',
+  })
+  @ApiResponse({ status: 200, description: 'Contraseña cambiada' })
+  @ApiResponse({ status: 400, description: 'Código inválido o vencido' })
+  @ApiResponse({ status: 429, description: 'Demasiados intentos' })
+  resetPassword(
+    @Body() dto: ResetPasswordDto,
+    @ReqContext() context: RequestContext,
+  ) {
+    return this.passwordReset.reset(dto, context);
   }
 }

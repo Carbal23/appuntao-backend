@@ -340,6 +340,7 @@ export class AccountLifecycleService {
       if (count === 0) return false;
 
       await tx.refreshToken.deleteMany({ where: { userId } });
+      await tx.passwordReset.deleteMany({ where: { userId } });
       await tx.debtor.updateMany({
         where: { userId },
         data: { userId: null },
@@ -451,8 +452,16 @@ export class AccountLifecycleService {
       where: { createdAt: { lt: authLogLimit } },
     });
 
+    // Los códigos de recuperar la contraseña duran 15 minutos; se guardan una
+    // semana porque el tope de 5 al día por cuenta se cuenta con ellos.
+    const resetLimit = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const { count: passwordResetsDeleted } =
+      await this.prisma.passwordReset.deleteMany({
+        where: { createdAt: { lt: resetLimit } },
+      });
+
     this.logger.log(
-      `Mantenimiento de cuentas: ${deletionsProcessed} eliminaciones, ${inactiveAnonymized} cuentas inactivas anonimizadas, ${transfersExpired} transferencias vencidas, ${invitationsExpired} invitaciones vencidas, ${businessesPurged} negocios eliminados, ${authLogsDeleted} eventos de seguridad vencidos`,
+      `Mantenimiento de cuentas: ${deletionsProcessed} eliminaciones, ${inactiveAnonymized} cuentas inactivas anonimizadas, ${transfersExpired} transferencias vencidas, ${invitationsExpired} invitaciones vencidas, ${businessesPurged} negocios eliminados, ${authLogsDeleted} eventos de seguridad vencidos, ${passwordResetsDeleted} códigos de contraseña vencidos`,
     );
     return {
       deletionsProcessed,
@@ -461,6 +470,7 @@ export class AccountLifecycleService {
       invitationsExpired,
       businessesPurged,
       authLogsDeleted,
+      passwordResetsDeleted,
     };
   }
 

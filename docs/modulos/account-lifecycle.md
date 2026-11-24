@@ -216,6 +216,7 @@ Cerrar un negocio (`PATCH /api/business/:id/inactivate`) devuelve `dataDeletionS
 4. Marca como vencidas las invitaciones sin respuesta.
 5. Borra los datos de los negocios cerrados hace más de `CLOSED_BUSINESS_RETENTION_MONTHS`: clientes, deudas, pagos, invitaciones, miembros, transferencias y su auditoría, porque esa auditoría guarda datos de los clientes. Solo quedan el registro de las exportaciones y el de la eliminación (`BUSINESS_PURGED`).
 6. Borra los eventos de seguridad (`AuthLog`) de más de `AUTH_LOG_RETENTION_MONTHS`. Va al final para que las anonimizaciones de esta misma corrida queden registradas.
+7. Borra los códigos de recuperar la contraseña (`PasswordReset`) de más de 7 días. Duran 15 minutos, pero se guardan una semana porque con ellos se cuenta el tope de 5 al día por cuenta ([auth](auth.md#recuperar-la-contraseña)).
 
 | Variable (opcional) | Por defecto | Qué es |
 | --- | --- | --- |
