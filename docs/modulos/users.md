@@ -79,12 +79,14 @@ Las respuestas nunca incluyen la contraseña ni los campos de estado interno: se
    - si existe y está **desactivado**, el mensaje indica que inicie sesión para reactivarla o contacte a soporte;
    - si existe y está activo, se indica qué dato está repetido.
 4. En una transacción se crea el usuario (rol `USER`) y sus aceptaciones (`UserConsent`, con IP y user agent).
-5. El registro no inicia sesión: el frontend hace login a continuación.
+5. Si el entorno exige verificar el correo (siempre en production), se envía un código al correo y la respuesta trae `emailVerificationRequired: true`: la app pide el código antes del login. Ver [email-verification](email-verification.md).
+6. El registro no inicia sesión: el frontend hace login a continuación.
 
 ### Edición
 
 - El propio usuario solo puede cambiar `firstName` y `lastName`. Si envía correo, teléfono, documento o rol, responde 403.
-- Un `ADMIN` puede cambiar todos esos campos, pero ninguno se puede vaciar: enviar `null` en cualquier campo responde 400.
+- Un `ADMIN` puede cambiar todos esos campos, pero ninguno se puede vaciar: enviar `null` en cualquier campo responde 400. Si cambia el correo, queda sin verificar (`emailVerifiedAt: null`).
+- **Por qué el usuario no cambia su correo ni su teléfono:** deciden qué invitaciones ve y a dónde llega el código para recuperar la contraseña. Cambiarlos sin verificar el dato nuevo le daría la cuenta a quien tenga la sesión abierta. Cuando se permita, el correo nuevo se confirmará con la contraseña y con un código.
 - La contraseña no se cambia por aquí (va por `/me/password`), y las aceptaciones legales tampoco (van por `/legal/accept`).
 
 ### Cambio de contraseña

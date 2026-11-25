@@ -16,7 +16,8 @@ Construido con **NestJS**, **Prisma ORM** y **PostgreSQL** (local o en Supabase)
 | **Prisma 6** | ORM, migraciones y cliente tipado |
 | **PostgreSQL** | Base de datos (local, o Supabase en development y production) |
 | **Passport + JWT + bcrypt** | Autenticación con access token y refresh token |
-| **Resend** | Envío de correos (invitaciones) |
+| **Resend** | Envío de correos (invitaciones, recuperar la contraseña, avisos) |
+| **Jest** | Pruebas unitarias y de punta a punta ([docs/pruebas.md](docs/pruebas.md)) |
 | **Swagger** | Documentación interactiva de la API (fuera de production) |
 
 Requisitos: **Node.js 22** y **PostgreSQL** para el entorno local.
@@ -37,7 +38,7 @@ npm run start:local
 
 - API: `http://localhost:3000/api`
 - Swagger: `http://localhost:3000/docs`
-- Health check: `http://localhost:3000/api/health`
+- Health check: `http://localhost:3000/api/health` (y `/api/health/ready`, que también revisa la base)
 
 ---
 
@@ -56,7 +57,9 @@ npm run start:local
 | `npm run legal:publish:<entorno> -- --type … --version … --file …` | Publica una versión de un documento legal (`--list` muestra los tipos). Ver [docs/modulos/legal.md](docs/modulos/legal.md) |
 | `npm run maintenance:run:<entorno>` | Ejecuta a mano la tarea diaria de cuentas (requiere `npm run build`). Ver [docs/modulos/account-lifecycle.md](docs/modulos/account-lifecycle.md) |
 | `npm run lint` / `npm run format` | ESLint y Prettier |
-| `npm test` | Pruebas unitarias |
+| `npm test` | Pruebas unitarias ([docs/pruebas.md](docs/pruebas.md)) |
+| `npm run test:e2e` | Pruebas de punta a punta (HTTP) |
+| `npm run test:cov` | Pruebas unitarias con cobertura |
 
 El detalle de cada script de migración y cuándo usarlo está en [docs/base-de-datos.md](docs/base-de-datos.md).
 

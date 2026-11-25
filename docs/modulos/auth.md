@@ -90,6 +90,9 @@ sequenceDiagram
         API-->>App: 401
     else Cuenta no activa
         API-->>App: 403 ACCOUNT_DISABLED / ACCOUNT_DEACTIVATED / ACCOUNT_DELETION_PENDING
+    else Correo sin verificar (si se exige)
+        API->>API: Envía un código al correo
+        API-->>App: 403 EMAIL_NOT_VERIFIED { email }
     else OK
         API->>DB: Borrar tokens del dispositivo y vencidos, crear RefreshToken
         API->>DB: AuthLog LOGIN_SUCCESS
@@ -102,7 +105,8 @@ sequenceDiagram
 3. El estado de la cuenta se revisa **después** de validar la contraseña, para no revelar el estado de una cuenta a quien no es su dueño:
    - `ACCOUNT_DISABLED`: la desactivó un administrador. No se puede reactivar desde el login.
    - `ACCOUNT_DEACTIVATED` o `ACCOUNT_DELETION_PENDING`: la desactivó el propio usuario. Si repite el login con `reactivate: true`, la cuenta se reactiva y se cancela la eliminación pendiente.
-4. Si `pendingLegalDocuments` no viene vacío, el frontend debe mostrar esos documentos y registrar la aceptación (ver [legal.md](legal.md)).
+4. Después se revisa el correo: si el entorno exige verificarlo y la cuenta no lo ha hecho, responde 403 `EMAIL_NOT_VERIFIED` con el `email` y le envía un código. La app pide el código y vuelve al login. Ver [email-verification](email-verification.md).
+5. Si `pendingLegalDocuments` no viene vacío, el frontend debe mostrar esos documentos y registrar la aceptación (ver [legal.md](legal.md)).
 
 ### Refresh (rotación)
 
@@ -115,6 +119,8 @@ sequenceDiagram
 5. En una transacción, se marca el token como rotado (solo si nadie lo rotó antes), se borran los rotados anteriores de la familia y se emite uno nuevo en la misma familia.
 
 El cliente **debe guardar el refresh token nuevo** en cada respuesta; el anterior deja de servir.
+
+Si el entorno exige el correo verificado y la cuenta no lo ha hecho (por ejemplo, porque se encendió la exigencia con sesiones abiertas), el refresh responde 401 y la app vuelve al login.
 
 ### Logout
 
@@ -152,7 +158,7 @@ sequenceDiagram
    - la cuenta pidió menos de **5 códigos en 24 horas**. Al llegar al tope se registra `PASSWORD_RESET_BLOCKED` (`DAILY_LIMIT`).
 2. **El código** tiene 6 dígitos (`crypto.randomInt`), vence a los **15 minutos** y se guarda como HMAC-SHA256 con una clave derivada de `JWT_SECRET`, nunca en claro. Pedir uno nuevo anula los anteriores: solo sirve el último que llegó.
 3. **Comprobar el código** (`verify-code` y `reset`). Cada código admite **5 intentos fallidos**. El intento se descuenta antes de comparar, para que varias peticiones a la vez no se pasen del límite, y se devuelve si el código es correcto: pasar por `verify-code` y luego por `reset` no gasta intentos. Todos los fallos responden el mismo 400 ("El código no es válido o ya venció…"), sea código equivocado, vencido, agotado o correo sin cuenta.
-4. **Cambiar la contraseña** (`reset`). `newPassword` sigue las mismas reglas que en el registro. En una transacción se marca el código como usado (solo una petición puede usarlo), se guarda la contraseña nueva y se borran **todos** los refresh tokens de la cuenta. Después se envía un aviso al correo. No devuelve tokens: la app lleva al login.
+4. **Cambiar la contraseña** (`reset`). `newPassword` sigue las mismas reglas que en el registro. En una transacción se marca el código como usado (solo una petición puede usarlo), se guarda la contraseña nueva, se marca el correo como verificado si no lo estaba (el código llegó a ese correo) y se borran **todos** los refresh tokens de la cuenta. Después se envía un aviso al correo. No devuelve tokens: la app lleva al login.
 
 El código se escribe en la app; no hay enlace, porque no existe un frontend web. Los correos se mandan con Resend ([arquitectura](../arquitectura.md)). Si el envío falla, queda en el log del servidor y la respuesta no cambia.
 
@@ -164,14 +170,14 @@ El código se escribe en la app; no hay enlace, porque no existe un frontend web
 - El contador del límite vive **en memoria** de cada instancia: se reinicia al reiniciar el servidor y no se comparte entre instancias.
 - Detrás de un proxy (Render) hay que definir `TRUST_PROXY=1`. Sin eso, todas las peticiones parecen venir de la IP del proxy y el límite se aplica a todos los usuarios a la vez.
 - `JWT_SECRET` debe tener al menos 32 caracteres o la aplicación no arranca. Cambiarlo anula también los códigos de recuperación vigentes, porque su clave sale de ahí.
-- **Límite de recuperar la contraseña** (`PasswordResetThrottlerGuard`), por IP + correo normalizado: 3 solicitudes de código cada 15 minutos, y 10 intentos con código cada 15 minutos, contando juntos `verify-code` y `reset`. Al pasarse responde 429. Lo que no se esquiva cambiando de IP lo cuenta la base de datos: 5 intentos por código y 5 códigos al día por cuenta.
+- **Límite de los códigos al correo** (`EmailCodeThrottlerGuard`, el mismo para recuperar la contraseña y verificar el correo, cada uno con sus contadores), por IP + correo normalizado: 3 solicitudes de código cada 15 minutos, y 10 intentos con código cada 15 minutos, contando juntos `verify-code` y `reset`. Al pasarse responde 429. Lo que no se esquiva cambiando de IP lo cuenta la base de datos: 5 intentos por código y 5 códigos al día por cuenta.
 
 ## Eventos que registra en `auth-log`
 
 | Evento | Cuándo |
 | --- | --- |
 | `LOGIN_SUCCESS` | Login correcto |
-| `LOGIN_FAILED` | Credenciales inválidas (`INVALID_CREDENTIALS`), identificador ambiguo (`AMBIGUOUS_IDENTIFIER`) o cuenta no activa (`ACCOUNT_*`) |
+| `LOGIN_FAILED` | Credenciales inválidas (`INVALID_CREDENTIALS`), identificador ambiguo (`AMBIGUOUS_IDENTIFIER`), cuenta no activa (`ACCOUNT_*`) o correo sin verificar (`EMAIL_NOT_VERIFIED`) |
 | `LOGIN_BLOCKED` | Se superó el límite de intentos |
 | `REFRESH_TOKEN_REUSED` | Se reutilizó un refresh token ya rotado (fuera del margen de 30 s) |
 | `LOGOUT` / `LOGOUT_ALL_DEVICES` | Cierre de sesión |
@@ -189,6 +195,7 @@ Lo que se escribió en `identifier` se guarda solo si corresponde a una cuenta, 
 | `auth-log` | Registrar eventos de seguridad |
 | `legal` | Calcular `pendingLegalDocuments` |
 | `account-lifecycle` | Estado de la cuenta en el login y reactivación |
+| `email-verification` | Exigir el correo verificado en login y refresh |
 | `users` | `serializeUser` y `userSafeSelect`, para no devolver la contraseña ni estados internos |
 | `EmailProvider` (Resend) | Código de recuperación y aviso de contraseña cambiada |
 | `account-lifecycle` (tarea diaria) | Borra los `PasswordReset` de más de 7 días y los de una cuenta al anonimizarla |
@@ -199,7 +206,7 @@ Lo que se escribió en `identifier` se guarda solo si corresponde a una cuenta, 
 | --- | --- |
 | 400 | Falta `x-refresh-token` en refresh o logout; body inválido; código de recuperación inválido, vencido o agotado |
 | 401 | Credenciales inválidas, identificador ambiguo, refresh token inválido, vencido, de otro dispositivo o reutilizado; usuario inactivado |
-| 403 | Cuenta no activa: `ACCOUNT_DISABLED`, `ACCOUNT_DEACTIVATED`, `ACCOUNT_DELETION_PENDING` (este último incluye `deletionScheduledAt`) |
+| 403 | Cuenta no activa: `ACCOUNT_DISABLED`, `ACCOUNT_DEACTIVATED`, `ACCOUNT_DELETION_PENDING` (este último incluye `deletionScheduledAt`); correo sin verificar: `EMAIL_NOT_VERIFIED` (incluye `email`) |
 | 429 | Demasiados intentos de login o de recuperar la contraseña |
 
 ## Decisiones y pendientes

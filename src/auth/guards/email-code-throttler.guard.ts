@@ -9,15 +9,27 @@ import { normalizeEmail } from 'src/common/validation/contact.validators';
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 
 /**
- * Límite por IP + correo en las rutas de recuperar la contraseña. Frena a
- * quien pide códigos sin parar (cada uno es un correo que se manda) o prueba
- * códigos al azar. Lo que no se esquiva cambiando de IP lo cuenta la base:
- * 5 intentos por código y 5 códigos al día por cuenta.
- *
- * `verify-code` y `reset` comparten contador: los dos prueban códigos.
+ * Contador que usa cada ruta. Las que piden un código comparten uno; las que
+ * lo prueban, otro. Recuperar la contraseña y verificar el correo no se
+ * mezclan.
+ */
+const GROUP_BY_HANDLER: Record<string, string> = {
+  forgotPassword: 'password-reset:request',
+  verifyResetCode: 'password-reset:code',
+  resetPassword: 'password-reset:code',
+  sendCode: 'email-verification:request',
+  verify: 'email-verification:code',
+};
+
+/**
+ * Límite por IP + correo en las rutas de códigos al correo: recuperar la
+ * contraseña y verificar el correo. Frena a quien pide códigos sin parar
+ * (cada uno es un correo que se manda) o prueba códigos al azar. Lo que no se
+ * esquiva cambiando de IP lo cuenta la base: 5 intentos por código y 5
+ * códigos al día por cuenta.
  */
 @Injectable()
-export class PasswordResetThrottlerGuard extends ThrottlerGuard {
+export class EmailCodeThrottlerGuard extends ThrottlerGuard {
   protected getTracker(req: Record<string, any>): Promise<string> {
     const body = req.body as { email?: unknown } | undefined;
     const email = normalizeEmail(body?.email);
@@ -32,9 +44,9 @@ export class PasswordResetThrottlerGuard extends ThrottlerGuard {
     suffix: string,
     name: string,
   ): string {
-    const group =
-      context.getHandler().name === 'forgotPassword' ? 'request' : 'code';
-    return `password-reset:${group}:${name}:${suffix}`;
+    const handler = context.getHandler().name;
+    const group = GROUP_BY_HANDLER[handler] ?? handler;
+    return `email-code:${group}:${name}:${suffix}`;
   }
 
   protected throwThrottlingException(): Promise<void> {
@@ -45,11 +57,11 @@ export class PasswordResetThrottlerGuard extends ThrottlerGuard {
 }
 
 /** 3 códigos cada 15 minutos por IP + correo. */
-export const PasswordResetRequestLimit = () =>
+export const CodeRequestLimit = () =>
   applyDecorators(Throttle({ default: { limit: 3, ttl: FIFTEEN_MINUTES_MS } }));
 
 /** 10 intentos con código cada 15 minutos por IP + correo. */
-export const PasswordResetCodeLimit = () =>
+export const CodeAttemptLimit = () =>
   applyDecorators(
     Throttle({ default: { limit: 10, ttl: FIFTEEN_MINUTES_MS } }),
   );

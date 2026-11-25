@@ -48,7 +48,7 @@ Es de **mejor esfuerzo**: si no se puede escribir, queda en el log del servidor 
 | Evento | Lo escribe | Cuándo | `reason` |
 | --- | --- | --- | --- |
 | `LOGIN_SUCCESS` | auth | Login correcto | — |
-| `LOGIN_FAILED` | auth | Login fallido | `INVALID_CREDENTIALS`, `AMBIGUOUS_IDENTIFIER`, o la cuenta no está activa: `ACCOUNT_DISABLED`, `ACCOUNT_DEACTIVATED`, `ACCOUNT_DELETION_PENDING` |
+| `LOGIN_FAILED` | auth | Login fallido | `INVALID_CREDENTIALS`, `AMBIGUOUS_IDENTIFIER`, la cuenta no está activa (`ACCOUNT_DISABLED`, `ACCOUNT_DEACTIVATED`, `ACCOUNT_DELETION_PENDING`) o el correo no está verificado (`EMAIL_NOT_VERIFIED`) |
 | `LOGIN_BLOCKED` | `LoginThrottlerGuard` | Se superó el límite de login (uno por bloqueo) | — |
 | `LOGOUT` / `LOGOUT_ALL_DEVICES` | auth | Cerrar sesión aquí o en todos | — |
 | `REFRESH_TOKEN_REUSED` | auth | Se reusó un refresh token ya rotado: posible robo de sesión | — |
@@ -59,6 +59,10 @@ Es de **mejor esfuerzo**: si no se puede escribir, queda en el log del servidor 
 | `PASSWORD_RESET_FAILED` | auth (`PasswordResetService`) | Código de recuperación rechazado | `INVALID_CODE`, `NO_ACTIVE_CODE` (no hay código vigente o el correo no es de una cuenta), `TOO_MANY_ATTEMPTS` |
 | `PASSWORD_RESET_BLOCKED` | auth (`PasswordResetService`) | Un código llegó a 5 fallos, o la cuenta a 5 códigos en 24 horas | `TOO_MANY_ATTEMPTS` / `DAILY_LIMIT` |
 | `PASSWORD_RESET_COMPLETED` | auth (`PasswordResetService`) | Se cambió la contraseña con un código | — |
+| `EMAIL_VERIFICATION_REQUESTED` | email-verification | Se creó y envió un código para verificar el correo | — |
+| `EMAIL_VERIFICATION_FAILED` | email-verification | Código de verificación rechazado | `INVALID_CODE`, `NO_ACTIVE_CODE`, `TOO_MANY_ATTEMPTS` |
+| `EMAIL_VERIFICATION_BLOCKED` | email-verification | Un código llegó a 5 fallos, o la cuenta a 5 códigos en 24 horas | `TOO_MANY_ATTEMPTS` / `DAILY_LIMIT` |
+| `EMAIL_VERIFIED` | email-verification | Se verificó el correo | — |
 | `ACCOUNT_DEACTIVATED` / `ACCOUNT_REACTIVATED` | account-lifecycle | Desactivar o reactivar la cuenta | `BY_ADMIN` si fue un administrador |
 | `ACCOUNT_DELETION_REQUESTED` / `_CANCELLED` | account-lifecycle | Pedir o cancelar la eliminación | `BUSINESS_CLOSURE_ACKNOWLEDGED` si aceptó cerrar sus negocios |
 | `ACCOUNT_ANONYMIZED` | account-lifecycle | Se borraron los datos de la cuenta | `DELETION_REQUESTED` o `INACTIVE_RETENTION_EXPIRED` |

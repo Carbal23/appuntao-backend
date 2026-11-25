@@ -21,6 +21,10 @@ import { EmailProvider } from 'src/providers/email.provider';
 import { AuthLogService } from 'src/auth-log/auth-log.service';
 import { AuthLogReason } from 'src/auth-log/auth-log.types';
 import type { RequestContext } from 'src/auth-log/auth-log.types';
+import {
+  assertCanOwnAnotherBusiness,
+  MAX_ACTIVE_OWNED_BUSINESSES,
+} from './business-cap';
 
 /** Días que tiene el miembro para aceptar o rechazar la transferencia. */
 const TRANSFER_EXPIRATION_DAYS = 7;
@@ -259,6 +263,14 @@ export class BusinessOwnershipService {
       if (!membership) {
         return { cancel: 'Ya no eres miembro de este negocio' } as const;
       }
+
+      // El mismo tope que al crear o reabrir. Lanza en lugar de cancelar: la
+      // propuesta sigue pendiente y puede aceptarla después de cerrar uno.
+      await assertCanOwnAnotherBusiness(
+        tx,
+        userId,
+        `Ya tienes ${MAX_ACTIVE_OWNED_BUSINESSES} negocios activos, el máximo. Cierra uno para poder quedarte con este.`,
+      );
 
       // La condición de estado impide aceptar dos veces la misma propuesta
       // si llegan dos peticiones a la vez.

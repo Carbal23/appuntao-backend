@@ -10,19 +10,28 @@ import {
 import { Request } from 'express';
 import { extractBusinessId } from 'src/common/utils/BusinessId.util';
 import { PrismaService } from 'src/prisma/prisma.service';
+import {
+  loadBusinessMembership,
+  type RequestWithMembership,
+} from './business-membership';
 
+/**
+ * Exige el negocio activo: que exista, que no esté cerrado y que el usuario
+ * sea miembro. Deja `request.business`. Ver docs/arquitectura.md.
+ */
 @Injectable()
 export class BusinessContextGuard implements CanActivate {
   constructor(private readonly prisma: PrismaService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<
-      Request & {
-        user?: { id: string; role: string };
-        business?: { id: string; inactivatedAt: Date | null };
-        params?: { businessId?: string };
-        query?: { businessId?: string };
-      }
+      Request &
+        RequestWithMembership & {
+          user?: { id: string; role: string };
+          business?: { id: string; inactivatedAt: Date | null };
+          params?: { businessId?: string };
+          query?: { businessId?: string };
+        }
     >();
 
     const { user } = request;
@@ -36,29 +45,26 @@ export class BusinessContextGuard implements CanActivate {
       );
     }
 
-    const business = await this.prisma.business.findUnique({
-      where: { id: businessId },
-      select: { id: true, inactivatedAt: true },
-    });
+    const membership = await loadBusinessMembership(
+      this.prisma,
+      request,
+      businessId,
+      user.id,
+    );
 
-    if (!business) {
+    if (!membership.businessExists) {
       throw new NotFoundException('Negocio no encontrado');
     }
 
-    if (business.inactivatedAt) {
+    if (membership.inactivatedAt) {
       throw new BadRequestException('El negocio se encuentra inactivado');
     }
 
-    const membership = await this.prisma.businessUser.findFirst({
-      where: { userId: user.id, businessId },
-      select: { id: true },
-    });
-
-    if (!membership) {
+    if (!membership.role) {
       throw new ForbiddenException('El usuario no pertenece a este negocio');
     }
 
-    request.business = business;
+    request.business = { id: businessId, inactivatedAt: null };
 
     return true;
   }

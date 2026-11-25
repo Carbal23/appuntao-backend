@@ -24,7 +24,8 @@ src/
 │   ├── validation/        normalización y validación de correo, teléfono, documento,
 │   │                      nombres y contraseña; búsqueda de usuario por identificador
 │   └── utils/             extractBusinessId
-└── <modulo>/              un módulo por dominio
+└── <modulo>/              un módulo por dominio (sus pruebas *.spec.ts van al lado)
+test/                      pruebas e2e (*.e2e-spec.ts) y su configuración
 scripts/                   scripts de operación (publicar documentos legales)
 ```
 
@@ -40,6 +41,7 @@ Cada dominio (`debts`, `payments`, `invitations`, ...) sigue la misma forma:
 | `dto/` | Entrada validada con `class-validator` y DTOs de respuesta para Swagger |
 | `<entidad>.select.ts` | `select` de Prisma reutilizable, para devolver siempre los mismos campos |
 | `utils/`, `helpers/` | Funciones propias del módulo |
+| `<archivo>.spec.ts` | Pruebas unitarias del archivo, a su lado. Ver [pruebas](pruebas.md) |
 
 ## Arranque (`main.ts`)
 
@@ -81,6 +83,8 @@ Los guards se aplican **por controller o por ruta** con `@UseGuards`. No hay gua
 | `ThrottlerGuard` + `@Throttle(...)` | Límite de peticiones por IP en rutas sensibles (registro, códigos de invitación) |
 | `InvitationThrottlerGuard` | Límite de invitaciones por negocio (30 por hora), sin importar el dispositivo |
 | `PasswordConfirmThrottlerGuard` + `@PasswordConfirmLimit()` | 5 intentos cada 15 minutos por usuario, sumando las confirmaciones con contraseña: cambiar la contraseña, desactivar o eliminar la cuenta y transferir un negocio. Va después de `JwtAuthGuard` |
+
+`BusinessContextGuard` y `BusinessRoleGuard` comparten una sola consulta (`loadBusinessMembership`, en `auth/guards/business-membership.ts`): el negocio y el rol del usuario salen de un `JOIN` y quedan en la petición. El guard que corre segundo, sea cual sea, la reutiliza. Así una ruta de negocio hace 2 consultas antes del controller (el usuario en `JwtStrategy` y esa), no 4.
 
 Los contadores de todos los límites viven en la memoria de cada instancia: si el servidor reinicia vuelven a cero, y con varias instancias cada una cuenta por su lado.
 
@@ -152,7 +156,7 @@ Convenciones que siguen los módulos que mueven plata o permisos:
 - **Bloqueo de filas.** Lo que se valida y luego se cambia va en una transacción que bloquea la fila con `SELECT … FOR UPDATE`. Así, dos peticiones a la vez se aplican una detrás de la otra:
   - la deuda, al abonar, descontar, reversar o anular, siempre en orden de `id` cuando son varias;
   - el negocio, al cambiar el equipo, transferirlo, cerrarlo o reabrirlo;
-  - el usuario, al crear un negocio, por el tope de 10.
+  - el usuario, al crear, reabrir o recibir por transferencia un negocio, por el tope de 10 (`assertCanOwnAnotherBusiness`, en `business/business-cap.ts`).
 - **Fiar toma el negocio con `FOR SHARE`**, para que no se fíe en un negocio que se está cerrando.
 - **Auditoría dentro de la transacción.** `AuditService.log(params, tx)` escribe en la misma transacción: si falla, la operación no se aplica. Sin `tx` es de mejor esfuerzo: un fallo solo queda en el log del servidor. Solo crear y reenviar una invitación y la descarga del Excel van sin `tx` ([audit](modulos/audit.md#cómo-se-escribe)). Los eventos de seguridad ([auth-log](modulos/auth-log.md)) siempre son de mejor esfuerzo.
 - **Un id de otro negocio responde 404**, igual que uno que no existe: no se confirma que exista en otro lado.
@@ -165,7 +169,7 @@ Convenciones que siguen los módulos que mueven plata o permisos:
 
 | Proveedor | Archivo | Uso |
 | --- | --- | --- |
-| Resend | `src/providers/email.provider.ts` | Correos de invitación, aviso al dueño de la respuesta a una transferencia, código para recuperar la contraseña y aviso de contraseña cambiada (HTML con tablas y estilos en línea, más versión en texto plano). Variables `RESEND_API_KEY`, `EMAIL_FROM`, `LOGO_URL` |
+| Resend | `src/providers/email.provider.ts` | Código para verificar el correo, correos de invitación, aviso al dueño de la respuesta a una transferencia, código para recuperar la contraseña y aviso de contraseña cambiada (HTML con tablas y estilos en línea, más versión en texto plano). Todo texto que escribe un usuario (nombre del negocio o de una persona) pasa por `escapeHtml` antes de entrar al HTML. Variables `RESEND_API_KEY`, `EMAIL_FROM`, `LOGO_URL` |
 
 ## Tareas programadas
 

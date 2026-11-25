@@ -37,6 +37,9 @@ export type LoginAccountState =
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Ids por consulta al borrar la auditoría de un negocio. */
+export const PURGE_BATCH_SIZE = 1000;
+
 @Injectable()
 export class AccountLifecycleService {
   private readonly logger = new Logger(AccountLifecycleService.name);
@@ -332,6 +335,7 @@ export class AccountLifecycleService {
           // futuro.
           documentNumber: `deleted-${userId}`,
           password: null,
+          emailVerifiedAt: null,
           inactivatedAt: user.inactivatedAt ?? now,
           deletionScheduledAt: null,
           anonymizedAt: now,
@@ -341,6 +345,7 @@ export class AccountLifecycleService {
 
       await tx.refreshToken.deleteMany({ where: { userId } });
       await tx.passwordReset.deleteMany({ where: { userId } });
+      await tx.emailVerification.deleteMany({ where: { userId } });
       await tx.debtor.updateMany({
         where: { userId },
         data: { userId: null },
@@ -459,9 +464,14 @@ export class AccountLifecycleService {
       await this.prisma.passwordReset.deleteMany({
         where: { createdAt: { lt: resetLimit } },
       });
+    // Los de verificar el correo, igual: 15 minutos de vida, una semana guardados.
+    const { count: emailVerificationsDeleted } =
+      await this.prisma.emailVerification.deleteMany({
+        where: { createdAt: { lt: resetLimit } },
+      });
 
     this.logger.log(
-      `Mantenimiento de cuentas: ${deletionsProcessed} eliminaciones, ${inactiveAnonymized} cuentas inactivas anonimizadas, ${transfersExpired} transferencias vencidas, ${invitationsExpired} invitaciones vencidas, ${businessesPurged} negocios eliminados, ${authLogsDeleted} eventos de seguridad vencidos, ${passwordResetsDeleted} códigos de contraseña vencidos`,
+      `Mantenimiento de cuentas: ${deletionsProcessed} eliminaciones, ${inactiveAnonymized} cuentas inactivas anonimizadas, ${transfersExpired} transferencias vencidas, ${invitationsExpired} invitaciones vencidas, ${businessesPurged} negocios eliminados, ${authLogsDeleted} eventos de seguridad vencidos, ${passwordResetsDeleted} códigos de contraseña vencidos, ${emailVerificationsDeleted} códigos de verificación de correo vencidos`,
     );
     return {
       deletionsProcessed,
@@ -471,6 +481,7 @@ export class AccountLifecycleService {
       businessesPurged,
       authLogsDeleted,
       passwordResetsDeleted,
+      emailVerificationsDeleted,
     };
   }
 
@@ -509,27 +520,31 @@ export class AccountLifecycleService {
         await tx.debtor.deleteMany({ where });
         await tx.businessUser.deleteMany({ where });
         await tx.businessOwnershipTransfer.deleteMany({ where });
-        await tx.auditLog.deleteMany({
-          where: {
-            entityId: {
-              in: [
-                businessId,
-                ...debtors,
-                ...debts,
-                ...payments,
-                ...groups,
-                ...invitations,
-                ...members,
-              ],
+        // Por lotes: Postgres admite unos 32.000 parámetros por consulta, y un
+        // negocio grande tiene más ids que eso. Con un solo `IN` la purga
+        // fallaba y el negocio nunca se eliminaba.
+        const entityIds = [
+          businessId,
+          ...debtors,
+          ...debts,
+          ...payments,
+          ...groups,
+          ...invitations,
+          ...members,
+        ];
+        for (let i = 0; i < entityIds.length; i += PURGE_BATCH_SIZE) {
+          await tx.auditLog.deleteMany({
+            where: {
+              entityId: { in: entityIds.slice(i, i + PURGE_BATCH_SIZE) },
+              action: {
+                notIn: [
+                  AuditAction.BUSINESS_DATA_EXPORTED,
+                  AuditAction.BUSINESS_PURGED,
+                ],
+              },
             },
-            action: {
-              notIn: [
-                AuditAction.BUSINESS_DATA_EXPORTED,
-                AuditAction.BUSINESS_PURGED,
-              ],
-            },
-          },
-        });
+          });
+        }
         await tx.business.delete({ where: { id: businessId } });
         await tx.auditLog.create({
           data: {

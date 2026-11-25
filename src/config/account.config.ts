@@ -26,4 +26,11 @@ export default registerAs('account', () => ({
     process.env.AUTH_LOG_RETENTION_MONTHS || '12',
     10,
   ),
+  // Exigir que el correo esté verificado para iniciar sesión. En production
+  // siempre: la variable no lo puede apagar. En local y QA es opcional,
+  // porque sin un dominio verificado en Resend los códigos solo le llegan al
+  // dueño de la cuenta de Resend.
+  requireEmailVerification:
+    process.env.NODE_ENV === 'production' ||
+    process.env.REQUIRE_EMAIL_VERIFICATION === 'true',
 }));

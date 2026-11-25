@@ -28,6 +28,13 @@ export class UserResponseDto {
   @ApiProperty({ enum: Role })
   role!: Role;
 
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description: 'Cuándo confirmó su correo con un código. null: sin verificar',
+  })
+  emailVerifiedAt?: Date | null;
+
   @ApiProperty()
   createdAt!: Date;
 

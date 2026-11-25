@@ -18,6 +18,7 @@ import {
   AuthLogReason,
   type RequestContext,
 } from 'src/auth-log/auth-log.types';
+import { EmailVerificationService } from 'src/email-verification/email-verification.service';
 
 const ADMIN_ONLY_FIELDS = [
   'email',
@@ -33,12 +34,18 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly authLog: AuthLogService,
     private readonly legalService: LegalService,
+    private readonly emailVerification: EmailVerificationService,
   ) {}
 
+  /**
+   * Registro. Si este entorno exige el correo verificado, le envía el código
+   * de una vez y responde `emailVerificationRequired: true`: la app pasa a
+   * pedírselo antes del login.
+   */
   async create(
     data: CreateUserDto,
     context?: RequestContext,
-  ): Promise<UserSafe> {
+  ): Promise<UserSafe & { emailVerificationRequired: boolean }> {
     const { acceptedLegalDocumentIds, ...userData } = data;
     await this.legalService.assertAcceptsCurrent(
       acceptedLegalDocumentIds,
@@ -106,7 +113,12 @@ export class UsersService {
         return created;
       });
 
-      return user;
+      const emailVerificationRequired = this.emailVerification.isPending(user);
+      if (emailVerificationRequired) {
+        this.emailVerification.sendCode(user.email!, context);
+      }
+
+      return { ...user, emailVerificationRequired };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
@@ -176,10 +188,13 @@ export class UsersService {
     });
     if (!user) throw new NotFoundException('User not found');
 
+    // Un correo nuevo hay que volver a verificarlo.
+    const emailChanged = data.email !== undefined && data.email !== user.email;
+
     try {
       return await this.prisma.user.update({
         where: { id },
-        data,
+        data: emailChanged ? { ...data, emailVerifiedAt: null } : data,
         select: userSafeSelect,
       });
     } catch (error) {

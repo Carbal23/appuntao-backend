@@ -1,6 +1,16 @@
 # Despliegue
 
-El backend de production se despliega en **Render** desde la rama **`master`**. Cada push a `master` dispara un despliegue.
+## Estado actual (2026-11-24)
+
+| Entorno | Dónde | Rama | Para qué |
+| --- | --- | --- | --- |
+| Local | Tu máquina | La de tu tarea | Desarrollar |
+| Development | Render (plan gratuito) + Supabase | `develop` | Es el entorno de **QA**: ahí se prueba con la app antes de aprobar |
+| Production | Todavía no existe | `master` | Lanzamiento. Lo que sigue en este documento sobre production es cómo debe quedar |
+
+El servicio de development se configura igual que el de production, con la rama `develop` y sus propias variables.
+
+El backend de production se desplegará en **Render** desde la rama **`master`**. Cada push a `master` dispara un despliegue.
 
 ## Configuración del servicio
 
@@ -9,7 +19,7 @@ El backend de production se despliega en **Render** desde la rama **`master`**. 
 | Branch | `master` |
 | Build Command | `npm install --include=dev && npx prisma generate && npm run build && npx prisma migrate deploy` |
 | Start Command | `npm run start:prod` |
-| Health Check Path | `/api/health` |
+| Health Check Path | `/api/health` (no consulta la base; ver [health](modulos/health.md)) |
 
 ### Qué hace cada paso del build
 
@@ -37,8 +47,14 @@ Se configuran en **Environment** del servicio. Ver la lista completa en [entorno
 - `DIRECT_URL`: pooler en **modo sesión**, puerto **5432**. La usa `migrate deploy`
 - `JWT_SECRET` (mínimo 32 caracteres)
 - `JWT_EXPIRES_IN`: en development `1d`, para que la app renueve menos contra el plan gratuito. **En production, `15m` o `30m`**: un token robado o una sesión cerrada dejan de servir pronto, y la app lo renueva sola sin que el usuario lo note
-- `RESEND_API_KEY` y `EMAIL_FROM` (dominio verificado en Resend)
+- `RESEND_API_KEY` y `EMAIL_FROM` (dominio verificado en Resend). **Imprescindible en production:** ahí se exige verificar el correo para entrar, y sin un dominio verificado los códigos no le llegan a nadie. `REQUIRE_EMAIL_VERIFICATION` no hace falta: production la ignora
 - `TRUST_PROXY=1` (Render pone un proxy delante; sin esto, los límites de intentos se aplican a todos los usuarios a la vez)
+
+## Mantener despierto el servicio
+
+En el plan gratuito, Render duerme el servicio tras unos 15 minutos sin peticiones, y Supabase pausa el proyecto tras una semana sin actividad. Un ping externo cada 10 minutos (cron-job.org o similar) a **`/api/health/ready`** evita las dos cosas: despierta el servidor y usa la base. Si responde 503, la base no está disponible.
+
+En un plan pago de Render el servicio no se duerme y el ping solo sirve como monitor.
 
 ## Tarea diaria de mantenimiento
 

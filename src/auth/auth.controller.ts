@@ -29,10 +29,10 @@ import {
   VerifyResetCodeDto,
 } from './dto/password-reset.dto';
 import {
-  PasswordResetCodeLimit,
-  PasswordResetRequestLimit,
-  PasswordResetThrottlerGuard,
-} from './guards/password-reset-throttler.guard';
+  CodeAttemptLimit,
+  CodeRequestLimit,
+  EmailCodeThrottlerGuard,
+} from './guards/email-code-throttler.guard';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -133,8 +133,8 @@ export class AuthController {
 
   @Post('password/forgot')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(PasswordResetThrottlerGuard)
-  @PasswordResetRequestLimit()
+  @UseGuards(EmailCodeThrottlerGuard)
+  @CodeRequestLimit()
   @ApiOperation({
     summary: 'Pedir un código para cambiar la contraseña olvidada',
     description:
@@ -151,8 +151,8 @@ export class AuthController {
 
   @Post('password/verify-code')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(PasswordResetThrottlerGuard)
-  @PasswordResetCodeLimit()
+  @UseGuards(EmailCodeThrottlerGuard)
+  @CodeAttemptLimit()
   @ApiOperation({
     summary: 'Comprobar el código antes de pedir la nueva contraseña',
     description:
@@ -170,8 +170,8 @@ export class AuthController {
 
   @Post('password/reset')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(PasswordResetThrottlerGuard)
-  @PasswordResetCodeLimit()
+  @UseGuards(EmailCodeThrottlerGuard)
+  @CodeAttemptLimit()
   @ApiOperation({
     summary: 'Cambiar la contraseña olvidada con el código',
     description:

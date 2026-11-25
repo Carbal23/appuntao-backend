@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -21,6 +22,7 @@ import { AccountLifecycleService } from 'src/account-lifecycle/account-lifecycle
 import { AuthLogReason, RequestContext } from 'src/auth-log/auth-log.types';
 import type { CredentialsCheck } from './interfaces/credentials-check.interface';
 import type { Device } from './interfaces/device.interface';
+import { EmailVerificationService } from 'src/email-verification/email-verification.service';
 
 /**
  * Margen para reutilizar un refresh token recién rotado sin tratarlo como
@@ -47,6 +49,7 @@ export class AuthService {
     private readonly authLog: AuthLogService,
     private readonly legalService: LegalService,
     private readonly accountLifecycle: AccountLifecycleService,
+    private readonly emailVerification: EmailVerificationService,
   ) {}
 
   private async validateCredentials(
@@ -235,6 +238,29 @@ export class AuthService {
       user = await this.accountLifecycle.reactivate(user, context);
     }
 
+    // Sin el correo verificado no se entra (si este entorno lo exige). Como
+    // el estado de la cuenta, solo se dice después de comprobar la
+    // contraseña. Se le envía un código de una vez: la app pasa directo a
+    // pedírselo.
+    if (this.emailVerification.isPending(user)) {
+      await this.authLog.record({
+        event: AuthLogEvent.LOGIN_FAILED,
+        userId: user.id,
+        identifier: dto.identifier,
+        reason: AuthLogReason.EMAIL_NOT_VERIFIED,
+        deviceId: dto.deviceId,
+        deviceName: dto.deviceName,
+        context,
+      });
+      this.emailVerification.sendCode(user.email!, context);
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'EMAIL_NOT_VERIFIED',
+        message: `Confirma tu correo para entrar. Te enviamos un código a ${user.email}.`,
+        email: user.email,
+      });
+    }
+
     const accessToken = await this.signAccessToken(user);
     const { token, refreshToken } = await this.createRefreshToken(user.id, {
       deviceId: dto.deviceId,
@@ -282,6 +308,12 @@ export class AuthService {
       where: { id: token.userId, inactivatedAt: null },
     });
     if (!user) throw new UnauthorizedException('Usuario no encontrado');
+    // Una sesión abierta antes de exigir la verificación tampoco se renueva.
+    if (this.emailVerification.isPending(user)) {
+      throw new UnauthorizedException(
+        'Confirma tu correo para seguir usando la app. Inicia sesión de nuevo.',
+      );
+    }
 
     const next = await this.prisma.$transaction(async (tx) => {
       const { count } = await tx.refreshToken.updateMany({

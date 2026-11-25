@@ -35,14 +35,18 @@ export class EmailProvider {
     businessName: string,
     expiresInDays: number,
   ) {
+    // El nombre lo escribe el dueño del negocio: crudo en el HTML, un nombre
+    // como `<a href="...">` metía un enlace en un correo que sale de nuestro
+    // dominio.
+    const business = escapeHtml(businessName);
     const html = this.renderInvitation({
-      heading: `Consulta tus deudas en ${businessName}`,
-      intro: `El negocio <strong>${businessName}</strong> te invita a ver tus vales y saldos en Appuntao. Usa este código dentro de la app.`,
+      heading: `Consulta tus deudas en ${business}`,
+      intro: `El negocio <strong>${business}</strong> te invita a ver tus vales y saldos en Appuntao. Usa este código dentro de la app.`,
       code,
       steps: [
         'Instala Appuntao e inicia sesi&oacute;n, o crea tu cuenta <strong>con este mismo correo</strong>.',
-        'Acepta la invitaci&oacute;n que te aparece en la app.',
-        'Si te pide un c&oacute;digo, escribe el de arriba.',
+        'Toca &laquo;Aceptar&raquo; en la invitaci&oacute;n que te aparece en la app.',
+        'Escribe el c&oacute;digo de arriba para confirmar que eres t&uacute;.',
       ],
       expiresInDays,
     });
@@ -70,24 +74,26 @@ export class EmailProvider {
     role: string,
     expiresInDays: number,
   ) {
-    const roleLabel = ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role;
+    const roleName = ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role;
+    const roleLabel = escapeHtml(roleName);
+    const business = escapeHtml(businessName);
 
     const html = this.renderInvitation({
-      heading: `Te invitaron a ${businessName}`,
-      intro: `Te dieron acceso al equipo de <strong>${businessName}</strong> en Appuntao como <strong>${roleLabel}</strong>. Usa este c&oacute;digo dentro de la app para unirte.`,
+      heading: `Te invitaron a ${business}`,
+      intro: `Te dieron acceso al equipo de <strong>${business}</strong> en Appuntao como <strong>${roleLabel}</strong>. Usa este c&oacute;digo dentro de la app para unirte.`,
       code,
       badge: roleLabel,
       steps: [
         'Instala Appuntao e inicia sesi&oacute;n, o crea tu cuenta <strong>con este mismo correo</strong>.',
-        'Acepta la invitaci&oacute;n que te aparece en la app.',
-        'Si te pide un c&oacute;digo, escribe el de arriba.',
+        'Toca &laquo;Aceptar&raquo; en la invitaci&oacute;n que te aparece en la app.',
+        'Escribe el c&oacute;digo de arriba para confirmar que eres t&uacute;.',
       ],
       expiresInDays,
     });
 
     const text = this.renderInvitationText({
       heading: `Te invitaron a trabajar en ${businessName}`,
-      intro: `Te dieron acceso al equipo de ${businessName} en Appuntao como ${roleLabel}.`,
+      intro: `Te dieron acceso al equipo de ${businessName} en Appuntao como ${roleName}.`,
       code,
       expiresInDays,
     });
@@ -96,6 +102,47 @@ export class EmailProvider {
       from: this.from,
       to,
       subject: `Invitación para unirte a ${businessName} en Appuntao`,
+      html,
+      text,
+    });
+  }
+
+  /* ── Verificar el correo ──────────────────────────────────────────────── */
+
+  async sendEmailVerificationCode(
+    to: string,
+    code: string,
+    expiresInMinutes: number,
+  ) {
+    const html = this.renderInvitation({
+      heading: 'Confirma tu correo',
+      intro:
+        'Para terminar de crear tu cuenta de Appuntao, confirma que este correo es tuyo. Escribe este c&oacute;digo en la app.',
+      code,
+      steps: [
+        'En la app, escribe el c&oacute;digo de arriba.',
+        'Inicia sesi&oacute;n con tu correo y tu contrase&ntilde;a.',
+      ],
+      footnote: `El c&oacute;digo vence en ${expiresInMinutes} minutos y solo sirve una vez. <strong>No se lo compartas a nadie</strong>: Appuntao nunca te lo va a pedir. Si no creaste una cuenta, ignora este correo.`,
+    });
+
+    const text = [
+      'Confirma tu correo',
+      '',
+      'Para terminar de crear tu cuenta de Appuntao, confirma que este correo es tuyo. Escribe este código en la app.',
+      '',
+      `Tu código: ${code}`,
+      '',
+      `El código vence en ${expiresInMinutes} minutos y solo sirve una vez. No se lo compartas a nadie: Appuntao nunca te lo va a pedir.`,
+      'Si no creaste una cuenta, ignora este correo.',
+      '',
+      'Appuntao · Lleva el control de tus fiados',
+    ].join('\n');
+
+    return this.resend.emails.send({
+      from: this.from,
+      to,
+      subject: `${code} es tu código para confirmar tu correo en Appuntao`,
       html,
       text,
     });
@@ -281,8 +328,8 @@ export class EmailProvider {
       '',
       'Cómo unirte:',
       '1. Instala Appuntao e inicia sesión, o crea tu cuenta con este mismo correo.',
-      '2. Acepta la invitación que te aparece en la app.',
-      '3. Si te pide un código, escribe el de arriba.',
+      '2. Toca "Aceptar" en la invitación que te aparece en la app.',
+      '3. Escribe el código de arriba para confirmar que eres tú.',
       '',
       `La invitación vence en ${opts.expiresInDays} días. Si no esperabas esta invitación, ignora este correo.`,
       '',
@@ -369,8 +416,12 @@ export class EmailProvider {
   }
 }
 
-/** Los nombres los escriben los usuarios: no se insertan crudos en el HTML. */
-function escapeHtml(value: string): string {
+/**
+ * Los nombres los escriben los usuarios: no se insertan crudos en el HTML.
+ * Todo texto que venga de un usuario (nombre de negocio, de persona) pasa por
+ * aquí antes de entrar a una plantilla.
+ */
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

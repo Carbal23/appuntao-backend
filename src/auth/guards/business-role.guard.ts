@@ -10,7 +10,16 @@ import { Request } from 'express';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { BUSINESS_ROLES_KEY } from '../decorators/business-role.decorator';
 import { extractBusinessId } from 'src/common/utils/BusinessId.util';
+import {
+  loadBusinessMembership,
+  type RequestWithMembership,
+} from './business-membership';
 
+/**
+ * Restringe por rol dentro del negocio (`@BusinessRoles(...)`). Sin el
+ * decorator deja pasar. Reutiliza la consulta de `BusinessContextGuard` si ya
+ * corrió en la misma petición.
+ */
 @Injectable()
 export class BusinessRoleGuard implements CanActivate {
   constructor(
@@ -26,11 +35,12 @@ export class BusinessRoleGuard implements CanActivate {
     if (!requiredRoles) return true;
 
     const request = context.switchToHttp().getRequest<
-      Request & {
-        user?: { id: string; role: string };
-        params?: { businessId?: string };
-        query?: { businessId?: string };
-      }
+      Request &
+        RequestWithMembership & {
+          user?: { id: string; role: string };
+          params?: { businessId?: string };
+          query?: { businessId?: string };
+        }
     >();
     const { user } = request;
     if (!user) throw new UnauthorizedException('Usuario no autenticado');
@@ -43,17 +53,18 @@ export class BusinessRoleGuard implements CanActivate {
       );
     }
 
-    const membership = await this.prisma.businessUser.findFirst({
-      where: { userId: user.id, businessId },
-      select: { role: true },
-    });
+    const { role } = await loadBusinessMembership(
+      this.prisma,
+      request,
+      businessId,
+      user.id,
+    );
 
-    if (!membership) {
+    if (!role) {
       throw new ForbiddenException('El usuario no pertenece a este negocio');
     }
 
-    const hasRole = requiredRoles.includes(membership.role);
-    if (!hasRole) {
+    if (!requiredRoles.includes(role)) {
       throw new ForbiddenException('Permisos insuficientes para este negocio');
     }
 
