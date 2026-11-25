@@ -31,6 +31,13 @@ import {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Mismo formato con que se generan los códigos: sin espacios ni guiones, en
+ * mayúsculas. Así la búsqueda usa el índice único de `code`.
+ */
+const normalizeCode = (code: string) =>
+  code.replace(/[\s-]/g, '').toUpperCase();
+
 /** Lo que ve el negocio: incluye el código, para compartirlo. */
 const businessView = {
   id: true,
@@ -354,8 +361,24 @@ export class InvitationsService {
     );
   }
 
-  async acceptById(id: string, user: UserSafe) {
-    return this.accept(await this.requireInvitation(id), user);
+  /**
+   * Aceptar una invitación de la lista (`incoming`) también exige su código.
+   * La lista la ve cualquiera que tenga el correo o el teléfono de la
+   * invitación en su cuenta, y esos datos no siempre están verificados: el
+   * teléfono nunca. El código solo lo tiene quien recibió el WhatsApp o el
+   * correo del negocio.
+   */
+  async acceptById(id: string, code: string, user: UserSafe) {
+    const invitation = await this.requireInvitation(id);
+    if (normalizeCode(code) !== invitation.code.toUpperCase()) {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'INVITATION_CODE_MISMATCH',
+        message:
+          'El código no corresponde a esta invitación. Revisa el que te enviaron por WhatsApp o correo.',
+      });
+    }
+    return this.accept(invitation, user);
   }
 
   async reject(id: string, user: UserSafe) {
@@ -585,9 +608,7 @@ export class InvitationsService {
   }
 
   private async findByCode(rawCode: string) {
-    // Mismo formato con que se generan: sin espacios ni guiones, en
-    // mayúsculas. Así la búsqueda usa el índice único de `code`.
-    const code = rawCode.replace(/[\s-]/g, '').toUpperCase();
+    const code = normalizeCode(rawCode);
     const invitation =
       (await this.prisma.invitation.findUnique({ where: { code } })) ??
       // Las invitaciones anteriores al rediseño tenían códigos en minúsculas.
@@ -696,7 +717,7 @@ export class InvitationsService {
         ? 'a ver tus cuentas en Appuntao'
         : `a unirte a su equipo en Appuntao como ${ROLE_LABELS[invitation.role!]}`;
 
-    const shareText = `Hola, ${businessName} te invita ${purpose}. Descarga Appuntao, inicia sesión o ${registerWith}, y acepta la invitación que te aparece en la app. Si te pide un código, es: ${invitation.code}`;
+    const shareText = `Hola, ${businessName} te invita ${purpose}. Descarga Appuntao, inicia sesión o ${registerWith}, y acepta la invitación que te aparece en la app con este código: ${invitation.code}`;
 
     return {
       shareText,

@@ -40,4 +40,6 @@ export enum AuthLogReason {
   INVALID_CODE = 'INVALID_CODE',
   TOO_MANY_ATTEMPTS = 'TOO_MANY_ATTEMPTS',
   DAILY_LIMIT = 'DAILY_LIMIT',
+  // Login con contraseña correcta, pero sin verificar el correo.
+  EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED',
 }

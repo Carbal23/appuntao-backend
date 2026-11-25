@@ -13,7 +13,8 @@ import { LegalModule } from 'src/legal/legal.module';
 import { AccountLifecycleModule } from 'src/account-lifecycle/account-lifecycle.module';
 import { EmailProvider } from 'src/providers/email.provider';
 import { PasswordResetService } from './password-reset.service';
-import { PasswordResetThrottlerGuard } from './guards/password-reset-throttler.guard';
+import { EmailVerificationModule } from 'src/email-verification/email-verification.module';
+import { EmailCodeThrottlerGuard } from './guards/email-code-throttler.guard';
 
 @Global()
 @Module({
@@ -39,13 +40,14 @@ import { PasswordResetThrottlerGuard } from './guards/password-reset-throttler.g
     AuthLogModule,
     LegalModule,
     AccountLifecycleModule,
+    EmailVerificationModule,
   ],
   providers: [
     AuthService,
     JwtStrategy,
     LoginThrottlerGuard,
     PasswordResetService,
-    PasswordResetThrottlerGuard,
+    EmailCodeThrottlerGuard,
     EmailProvider,
   ],
   controllers: [AuthController],

@@ -5,8 +5,10 @@
 | Entorno | `NODE_ENV` | Archivo | Base de datos |
 | --- | --- | --- | --- |
 | Local | `local` | `.env.local` | PostgreSQL en tu máquina |
-| Development | `development` | `.env.development` | Supabase (development) |
-| Production | `production` | `.env.production` | Supabase (production) |
+| Development (QA) | `development` | `.env.development` | Supabase (development) |
+| Production (todavía no existe) | `production` | `.env.production` | Supabase (production) |
+
+Hoy development hace de QA: es el único entorno en la nube y ahí se prueba con la app. Ver [despliegue](despliegue.md#estado-actual-2026-11-24).
 
 La aplicación carga `.env.<NODE_ENV>` al arrancar (`.env.local` si `NODE_ENV` no está definido). Los scripts `start:*` y `migrate:*` usan `dotenv-cli` para cargar el archivo correcto.
 
@@ -31,6 +33,7 @@ Los archivos `.env*` **no van en Git**. En el servidor de despliegue las variabl
 | `INACTIVE_ACCOUNT_RETENTION_MONTHS` | No | `48` | Meses tras los cuales se anonimiza una cuenta desactivada |
 | `CLOSED_BUSINESS_RETENTION_MONTHS` | No | `6` | Meses tras los cuales se eliminan los datos de un negocio inactivo |
 | `AUTH_LOG_RETENTION_MONTHS` | No | `12` | Meses tras los cuales se borran los eventos de seguridad (`AuthLog`) |
+| `REQUIRE_EMAIL_VERIFICATION` | No | `false` | `true` exige verificar el correo para entrar en local o QA. **En production se exige siempre**, diga lo que diga. Ver [email-verification](modulos/email-verification.md) |
 
 ## Ejemplos
 

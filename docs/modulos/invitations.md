@@ -11,7 +11,7 @@ Permite a un negocio invitar a una persona a:
 - **unirse a su equipo** (`BUSINESS_USER`) con un rol, o
 - **ver sus cuentas como cliente** (`DEBTOR`), vinculando su cuenta de usuario con su registro de deudor.
 
-La invitación va dirigida a un **correo o teléfono**. Le aparece en la app a quien tenga ese dato en su cuenta, y solo esa persona puede aceptarla. El código sirve para compartirla por fuera (correo, WhatsApp).
+La invitación va dirigida a un **correo o teléfono**. Le aparece en la app a quien tenga ese dato en su cuenta, y solo esa persona puede aceptarla, **siempre con el código** que el negocio le envió por correo o WhatsApp.
 
 **Es la única forma de vincular una cuenta con un cliente.** Antes, al registrarse, la cuenta se vinculaba sola con los clientes de **cualquier** negocio que tuvieran su mismo documento o teléfono. Eso dejaba que un negocio cualquiera "reclamara" a una persona registrando su número. Desde el commit `e24f320`, el vínculo solo se crea cuando la persona acepta una invitación `DEBTOR` del negocio. Los vínculos que ya existían se conservan.
 
@@ -63,7 +63,7 @@ Exigen `x-business-id` y rol `OWNER`, `ADMIN` o `CASHIER` en ese negocio. **El c
 | `GET` | `/api/invitations/incoming` | Invitaciones pendientes y vigentes dirigidas al correo o teléfono de su cuenta, de negocios activos. Para mostrarlas al abrir la app |
 | `GET` | `/api/invitations/:code` | Ver una invitación por su código. 10 por minuto |
 | `POST` | `/api/invitations/accept` | Aceptar con el código (body `{ code }`). 10 por minuto |
-| `POST` | `/api/invitations/:id/accept` | Aceptar una invitación de `incoming` |
+| `POST` | `/api/invitations/:id/accept` | Aceptar una invitación de `incoming`, con su código (body `{ code }`). 10 por minuto. Un código que no es de esa invitación responde 400 `INVITATION_CODE_MISMATCH` |
 | `POST` | `/api/invitations/:id/reject` | Rechazar |
 
 ### Crear: body
@@ -134,7 +134,7 @@ sequenceDiagram
     Dueño-->>Invitado: Comparte por WhatsApp (opcional)
     Invitado->>API: GET /invitations/incoming
     API-->>Invitado: Invitaciones para su correo o teléfono
-    Invitado->>API: POST /invitations/:id/accept
+    Invitado->>API: POST /invitations/:id/accept { code }
     API->>API: Transacción: ACCEPTED + crear BusinessUser
     API-->>Invitado: "Te uniste a ... como Cajero"
 ```
@@ -168,6 +168,7 @@ Para quien recibió el código por fuera de la app. El código no distingue may�
 ## Permisos y seguridad
 
 - **Solo la persona invitada responde.** Para ver por código, aceptar o rechazar, el correo o el teléfono de la invitación deben coincidir con los de la cuenta. Si no, 403.
+- **Aceptar siempre exige el código**, también desde `incoming`. El teléfono de una cuenta nunca se verifica (y el correo, solo donde se exige): alguien podía registrarse con el celular de un cliente, ver su invitación en `incoming` y aceptarla para ver sus deudas, o entrar a un equipo. El código solo lo tiene quien recibió el WhatsApp o el correo del negocio. Rechazar no lo pide.
 - **Código:** 10 caracteres de un alfabeto de 31 símbolos sin caracteres confundibles (sin `0/O`, `1/I/L`): unas 8 × 10^14 combinaciones. Además, ver y aceptar por código tienen límite de 10 por minuto.
 - **Límite por negocio:** crear y reenviar comparten un límite de 30 por hora **por negocio**, sin importar el dispositivo. El negocio se toma igual que en `BusinessContextGuard`: del header `x-business-id`, de la ruta o del query. Evita usar APPUNTAO para envíos masivos de correo, que dañarían la reputación del dominio de envío.
 - Los límites viven en memoria de cada instancia (igual que el de login).
@@ -215,6 +216,7 @@ Las invitaciones anteriores al rediseño quedan con `createdById` en `null` y pu
 ## Decisiones y pendientes
 
 - **Decisión:** la invitación se dirige a un dato de contacto y solo esa persona puede aceptarla. **Por qué:** antes cualquiera con el código podía aceptarla.
+- **Decisión (2026-11-24):** aceptar exige el dato de contacto **y** el código. **Por qué:** el dato solo no basta mientras el teléfono no se verifique. Los textos del correo y de WhatsApp dicen "acepta con este código".
 - **Decisión:** `listByBusiness` (obsoleto) compara la ruta con el negocio activo. **Por qué:** antes permitía ver invitaciones de otros negocios.
 - **Decisión:** compartir por WhatsApp con un enlace `wa.me`. **Por qué:** no requiere una integración paga; el negocio lo envía desde su teléfono.
 - **Decisión (2026-11-21):** el cajero puede invitar clientes, pero no al equipo. **Por qué:** es quien registra a los clientes en el mostrador.

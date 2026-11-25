@@ -168,14 +168,28 @@ export class InvitationsController {
   }
 
   @Post(':id/accept')
-  @ApiOperation({ summary: 'Aceptar una invitación que aparece en la app' })
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60 * 1000 } })
+  @ApiOperation({
+    summary: 'Aceptar una invitación que aparece en la app',
+    description:
+      'Exige el código de la invitación: la lista de invitaciones la ve cualquiera con el correo o el teléfono de la invitación en su cuenta, pero el código solo lo tiene quien recibió el mensaje. Máximo 10 intentos por minuto.',
+  })
   @ApiResponse({ status: 201, description: 'Invitación aceptada' })
+  @ApiResponse({
+    status: 400,
+    description: 'El código no corresponde (INVITATION_CODE_MISMATCH)',
+  })
   @ApiResponse({
     status: 403,
     description: 'La invitación es para otra persona',
   })
-  acceptById(@Param('id') id: string, @GetUser() user: UserSafe) {
-    return this.invitations.acceptById(id, user);
+  acceptById(
+    @Param('id') id: string,
+    @Body() dto: AcceptInvitationDto,
+    @GetUser() user: UserSafe,
+  ) {
+    return this.invitations.acceptById(id, dto.code, user);
   }
 
   @Post(':id/reject')

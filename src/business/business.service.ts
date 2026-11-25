@@ -23,13 +23,7 @@ import { buildWhere } from 'src/common/pagination/utils/build-where.util';
 import { paginate } from 'src/common/pagination/utils/paginate.util';
 import { LegalService } from 'src/legal/legal.service';
 import type { RequestContext } from 'src/auth-log/auth-log.types';
-
-/**
- * Negocios activos que puede tener una persona como dueña. Alcanza de sobra
- * para una tienda real y frena la creación masiva desde una sola cuenta. Los
- * cerrados no cuentan.
- */
-export const MAX_ACTIVE_OWNED_BUSINESSES = 10;
+import { assertCanOwnAnotherBusiness } from './business-cap';
 
 const memberSelect = {
   id: true,
@@ -73,9 +67,7 @@ export class BusinessService {
     );
 
     return this.prisma.$transaction(async (tx) => {
-      // Bloquea al usuario: dos creaciones a la vez no se saltan el tope.
-      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
-      await this.assertBelowCap(tx, userId);
+      await assertCanOwnAnotherBusiness(tx, userId);
 
       const business = await tx.business.create({
         data: {
@@ -340,8 +332,7 @@ export class BusinessService {
         );
       }
 
-      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
-      await this.assertBelowCap(tx, userId);
+      await assertCanOwnAnotherBusiness(tx, userId);
 
       const reactivated = await tx.business.update({
         where: { id },
@@ -382,17 +373,6 @@ export class BusinessService {
       );
     }
     return business;
-  }
-
-  private async assertBelowCap(tx: Prisma.TransactionClient, userId: string) {
-    const active = await tx.business.count({
-      where: { ownerId: userId, inactivatedAt: null },
-    });
-    if (active >= MAX_ACTIVE_OWNED_BUSINESSES) {
-      throw new BadRequestException(
-        `Ya tienes ${MAX_ACTIVE_OWNED_BUSINESSES} negocios activos, el máximo. Cierra uno para abrir otro.`,
-      );
-    }
   }
 
   private deletionDate(inactivatedAt: Date): Date {

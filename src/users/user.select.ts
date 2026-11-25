@@ -9,6 +9,7 @@ export const userSafeSelect = {
   role: true,
   documentType: true,
   documentNumber: true,
+  emailVerifiedAt: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.UserSelect;

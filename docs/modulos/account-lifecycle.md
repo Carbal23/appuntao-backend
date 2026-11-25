@@ -187,6 +187,7 @@ Es una decisión: sirve para investigar accesos indebidos y para probar lo que p
 - Hay una sola vigente por negocio. Para proponer otra, primero se cancela la que hay; si no, la respuesta es 409.
 - Al aceptar, el negocio cambia de dueño en una transacción: el nuevo queda `OWNER` y el anterior `ADMIN`.
 - Si al aceptar el negocio ya no está activo, cambió de dueño o el destinatario ya no es miembro, la transferencia se cancela y se responde 400.
+- Si el destinatario ya tiene 10 negocios activos como dueño, se responde 400 y la transferencia **sigue pendiente**: puede aceptarla después de cerrar uno ([business](business.md#reglas-de-negocio)).
 - Sacar a un miembro del equipo cancela las transferencias que tenía por responder.
 - **Cuando el miembro acepta o rechaza, el backend le envía un correo al dueño que la propuso** (`EmailProvider.sendOwnershipTransferResponse`, con Resend). Es un aviso: si el dueño no tiene correo o el envío falla, la respuesta queda guardada igual y el fallo solo se registra en el log. Las que vencen o se cancelan no envían correo; se ven en el historial.
 - El nuevo dueño tendrá pendiente el acuerdo de transmisión de datos para negocios (ver [legal](legal.md)), y la app se lo pide al aceptar.
@@ -214,9 +215,9 @@ Cerrar un negocio (`PATCH /api/business/:id/inactivate`) devuelve `dataDeletionS
 2. Anonimiza las cuentas desactivadas hace más de `INACTIVE_ACCOUNT_RETENTION_MONTHS`.
 3. Marca como vencidas (`EXPIRED`) las transferencias sin respuesta.
 4. Marca como vencidas las invitaciones sin respuesta.
-5. Borra los datos de los negocios cerrados hace más de `CLOSED_BUSINESS_RETENTION_MONTHS`: clientes, deudas, pagos, invitaciones, miembros, transferencias y su auditoría, porque esa auditoría guarda datos de los clientes. Solo quedan el registro de las exportaciones y el de la eliminación (`BUSINESS_PURGED`).
+5. Borra los datos de los negocios cerrados hace más de `CLOSED_BUSINESS_RETENTION_MONTHS`: clientes, deudas, pagos, invitaciones, miembros, transferencias y su auditoría, porque esa auditoría guarda datos de los clientes. Solo quedan el registro de las exportaciones y el de la eliminación (`BUSINESS_PURGED`). La auditoría se borra en lotes de 1.000 ids (`PURGE_BATCH_SIZE`): Postgres admite unos 32.000 parámetros por consulta y un negocio grande tiene más ids que eso.
 6. Borra los eventos de seguridad (`AuthLog`) de más de `AUTH_LOG_RETENTION_MONTHS`. Va al final para que las anonimizaciones de esta misma corrida queden registradas.
-7. Borra los códigos de recuperar la contraseña (`PasswordReset`) de más de 7 días. Duran 15 minutos, pero se guardan una semana porque con ellos se cuenta el tope de 5 al día por cuenta ([auth](auth.md#recuperar-la-contraseña)).
+7. Borra los códigos de recuperar la contraseña (`PasswordReset`) y de verificar el correo (`EmailVerification`) de más de 7 días. Duran 15 minutos, pero se guardan una semana porque con ellos se cuenta el tope de 5 al día por cuenta ([auth](auth.md#recuperar-la-contraseña)).
 
 | Variable (opcional) | Por defecto | Qué es |
 | --- | --- | --- |
@@ -240,7 +241,7 @@ npm run maintenance:run:local   # o :development / :production
 
 | Código | `error` | Cuándo |
 | --- | --- | --- |
-| 400 | — | Contraseña incorrecta; destinatario que no es miembro activo; transferencia vencida; negocio inactivo o con otro dueño al aceptar |
+| 400 | — | Contraseña incorrecta; destinatario que no es miembro activo; transferencia vencida; negocio inactivo o con otro dueño al aceptar; quien acepta ya tiene 10 negocios activos |
 | 400 | `BUSINESS_CLOSURE_ACK_REQUIRED` | Pidió eliminar su cuenta siendo dueño de negocios sin confirmar el cierre. Trae `ownedBusinesses` |
 | 429 | — | Más de 5 intentos con contraseña en 15 minutos (desactivar, eliminar, transferir o cambiar la contraseña, sumados) |
 | 403 | `ACCOUNT_DEACTIVATED` | Login de una cuenta que el usuario desactivó |

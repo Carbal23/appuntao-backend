@@ -51,7 +51,7 @@ Todos exigen `Authorization: Bearer <token>`. Usan el id en la ruta, no `x-busin
 
 ## Reglas de negocio
 
-1. **Tope de 10 negocios activos como dueño.** Frena la creación masiva desde una sola cuenta; una tienda real tiene entre 1 y 5. Los cerrados no cuentan, y reabrir sí cuenta. Para que dos creaciones a la vez no se salten el tope, se bloquea la fila del usuario. Recibir un negocio por transferencia no revisa el tope.
+1. **Tope de 10 negocios activos como dueño.** Frena la creación masiva desde una sola cuenta; una tienda real tiene entre 1 y 5. Los cerrados no cuentan, y reabrir sí cuenta. Recibir un negocio por transferencia también cuenta: quien ya tiene 10 no puede aceptar hasta cerrar uno, y la propuesta sigue pendiente mientras tanto. Las tres operaciones usan la misma regla (`assertCanOwnAnotherBusiness`, en `business-cap.ts`), que bloquea la fila del usuario para que dos a la vez no se salten el tope.
 2. **La moneda es COP.** La app muestra todo en pesos. Cuando haya otras monedas habrá que decidir qué pasa con las deudas ya registradas; por eso no se edita.
 3. **Cerrar exige que no haya deudas por cobrar.** Las que queden se cobran, se descuentan o se anulan antes.
 4. **Al cerrar, lo pendiente se cancela**: invitaciones y transferencia del dueño.
@@ -91,6 +91,7 @@ En los `BUSINESS_UPDATED` anteriores a esta revisión, el "anterior" guarda en r
 | 9 | La app no tenía cómo editar el negocio | Decisión: pantalla "Editar negocio" |
 | 10 | Sin tope de negocios por persona | Decisión: 10 activos como dueño |
 | 11 | Transferencia: dos propuestas simultáneas, y 500 al aceptar si sacaban al miembro | Ver [Transferencia del dueño](#transferencia-del-dueño) |
+| 12 | Revisión general (2026-11-24): aceptar una transferencia dejaba tener más de 10 negocios activos | **Corregido**: aceptar revisa el tope; con prueba en `business-ownership.service.spec.ts` |
 
 **Fuera de este módulo, hecho en la misma rama:** las confirmaciones con contraseña no tenían límite de intentos (transferir el negocio, desactivar o eliminar la cuenta, cambiar la contraseña). Con la sesión de otra persona se podía probar contraseñas sin freno. Ahora el límite es de 5 intentos cada 15 minutos por usuario, sumando las cuatro rutas, y pasado el límite responden 429 (ver [users](users.md#permisos-y-seguridad)). Se probó con 9 casos.
 

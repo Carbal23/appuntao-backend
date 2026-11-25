@@ -6,7 +6,7 @@ Resumen de cada modelo de `prisma/schema.prisma`. El detalle de cómo los usa ca
 
 | Modelo | Qué representa |
 | --- | --- |
-| `User` | Persona registrada. Puede ser dueña de negocios, miembro de un equipo o deudor vinculado. Tiene un rol de plataforma (`USER` o `ADMIN`) y los campos del ciclo de vida: `inactivatedAt`, `inactivatedBy`, `deletionRequestedAt`, `deletionScheduledAt`, `anonymizedAt` |
+| `User` | Persona registrada. Puede ser dueña de negocios, miembro de un equipo o deudor vinculado. Tiene un rol de plataforma (`USER` o `ADMIN`), `emailVerifiedAt` (cuándo confirmó el correo) y los campos del ciclo de vida: `inactivatedAt`, `inactivatedBy`, `deletionRequestedAt`, `deletionScheduledAt`, `anonymizedAt` |
 | `Business` | Negocio. Pertenece a un `owner` y tiene equipo, deudores, deudas, pagos e invitaciones. Moneda `COP` (la única aceptada por ahora). `inactivatedAt` marca que está cerrado; se puede reabrir hasta que se borran sus datos |
 | `BusinessUser` | Membresía de un usuario en un negocio, con su rol (`OWNER`, `ADMIN`, `CASHIER`, `VIEWER`). Única por par negocio-usuario |
 | `Debtor` | Cliente de un negocio. Puede existir sin cuenta y vincularse después a un `User`. `inactivatedAt` marca que lo quitaron de la lista |
@@ -15,6 +15,7 @@ Resumen de cada modelo de `prisma/schema.prisma`. El detalle de cómo los usa ca
 | `PaymentGroup` | Agrupa los pagos de un mismo abono repartido entre varias deudas de un deudor. `reversedAt` marca si se reversó |
 | `Invitation` | Invitación a un cliente (`DEBTOR`) o a un miembro del equipo (`BUSINESS_USER`, con su rol), dirigida a un correo o teléfono, con código único, vencimiento, estado (`PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`, `EXPIRED`), quién la creó y quién la aceptó |
 | `RefreshToken` | Refresh tokens guardados como hash, agrupados por familia (rotación) y asociados a un dispositivo |
+| `EmailVerification` | Códigos para verificar el correo: correo al que se envió, HMAC del código, vencimiento, intentos, cuándo se usó e IP. Se borran a los 7 días. Ver [email-verification](modulos/email-verification.md) |
 | `PasswordReset` | Códigos para recuperar la contraseña: HMAC del código (nunca en claro), vencimiento, intentos fallidos (`attempts`), cuándo se usó (`usedAt`) e IP de quien lo pidió. Se borran a los 7 días. Ver [auth](modulos/auth.md#recuperar-la-contraseña) |
 | `AuthLog` | Eventos de seguridad: logins, bloqueos, logouts, contraseñas (cambios, confirmaciones fallidas, bloqueos, recuperación), reutilización de refresh tokens y eventos del ciclo de vida de la cuenta. Se borran a los 12 meses. Ver [auth-log](modulos/auth-log.md) |
 | `AuditLog` | Auditoría de acciones: quién hizo qué, sobre qué entidad y con qué datos. Vive mientras exista el negocio. Ver [audit](modulos/audit.md) |
@@ -31,13 +32,13 @@ Los montos usan `Decimal(12, 2)`.
 
 | Enum | Valores |
 | --- | --- |
-| `Role` (rol en la plataforma) | `USER`: por defecto, cualquier usuario registrado. `ADMIN`: administrador de la plataforma (soporte), puede desactivar y reactivar cuentas. `MODERATOR` y `SUSPENDED` existen en el esquema pero no se usan |
+| `Role` (rol en la plataforma) | `USER`: por defecto, cualquier usuario registrado. `ADMIN`: administrador de la plataforma (soporte), puede desactivar y reactivar cuentas |
 | `BusinessUserRole` (rol en un negocio) | `OWNER`: dueño (también está en `Business.ownerId`). `ADMIN`: corrige clientes, deudas y pagos y maneja cajeros y solo lectura. `CASHIER`: registra clientes, fía y abona. `VIEWER`: solo lectura. Detalle en [arquitectura](arquitectura.md#dos-tipos-de-rol) |
 | `DocumentType` | `CC`, `NIT`, `FOREIGNER` |
 | `DebtStatus` | `OPEN`, `PARTIAL` (con abonos), `PAID`, `CANCELLED` |
 | `PaymentType` / `PaymentMethod` | `PAYMENT` (abono, baja el saldo), `DISCOUNT` (descuento, baja el saldo; antes `ADJUSTMENT`), `REVERSAL` (reverso, sube el saldo) / `CASH`, `TRANSFER`, `OTHER` |
 | `InvitationType` / `InvitationStatus` | `DEBTOR`, `BUSINESS_USER` / `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`, `EXPIRED` |
-| `AuthLogEvent` | Eventos de seguridad: logins, bloqueos, logouts, cambios de contraseña y del ciclo de vida de la cuenta |
+| `AuthLogEvent` | Eventos de seguridad: logins, bloqueos, logouts, cambios de contraseña, verificación del correo y ciclo de vida de la cuenta |
 | `InactivationSource` | Quién desactivó una cuenta: `SELF` o `ADMIN` |
 | `LegalAudience` | A quién se le exige un documento legal: `ALL_USERS` o `BUSINESS_OWNERS` |
 | `OwnershipTransferStatus` | `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`, `EXPIRED` |

@@ -7,12 +7,12 @@ import {
   User,
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { createHmac, randomInt, timingSafeEqual } from 'crypto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AuthLogService } from 'src/auth-log/auth-log.service';
 import { AuthLogReason, RequestContext } from 'src/auth-log/auth-log.types';
 import { EmailProvider } from 'src/providers/email.provider';
 import { ResetPasswordDto, VerifyResetCodeDto } from './dto/password-reset.dto';
+import { CodeHasher, createCodeHasher, generateCode } from './one-time-code';
 
 /** Minutos que vale un código. */
 export const RESET_CODE_TTL_MINUTES = 15;
@@ -43,7 +43,7 @@ const INVALID_CODE_MESSAGE =
 @Injectable()
 export class PasswordResetService {
   private readonly logger = new Logger(PasswordResetService.name);
-  private readonly hmacKey: Buffer;
+  private readonly codes: CodeHasher;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -51,11 +51,10 @@ export class PasswordResetService {
     private readonly emailProvider: EmailProvider,
     config: ConfigService,
   ) {
-    // Derivada de JWT_SECRET: un secreto menos que configurar, y sin él una
-    // copia de la base no basta para probar los 10^6 códigos posibles.
-    this.hmacKey = createHmac('sha256', config.getOrThrow<string>('jwt.secret'))
-      .update('password-reset-code')
-      .digest();
+    this.codes = createCodeHasher(
+      config.getOrThrow<string>('jwt.secret'),
+      'password-reset-code',
+    );
   }
 
   /**
@@ -103,7 +102,7 @@ export class PasswordResetService {
       return;
     }
 
-    const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
+    const code = generateCode();
 
     // El código nuevo anula los anteriores: solo sirve el último que llegó.
     await this.prisma.$transaction([
@@ -114,7 +113,7 @@ export class PasswordResetService {
       this.prisma.passwordReset.create({
         data: {
           userId: user.id,
-          codeHash: this.hashCode(code),
+          codeHash: this.codes.hash(code),
           expiresAt: new Date(now.getTime() + RESET_CODE_TTL_MINUTES * 60_000),
           ipAddress: context?.ipAddress,
         },
@@ -165,7 +164,11 @@ export class PasswordResetService {
 
       await tx.user.update({
         where: { id: user.id },
-        data: { password: hashedPassword },
+        // El código llegó a este correo: también prueba que es suyo.
+        data: {
+          password: hashedPassword,
+          emailVerifiedAt: user.emailVerifiedAt ?? now,
+        },
       });
       await tx.refreshToken.deleteMany({ where: { userId: user.id } });
       return true;
@@ -237,7 +240,7 @@ export class PasswordResetService {
       throw new BadRequestException(INVALID_CODE_MESSAGE);
     }
 
-    if (!this.codeMatches(dto.code, reset.codeHash)) {
+    if (!this.codes.matches(dto.code, reset.codeHash)) {
       const attempts = reset.attempts + 1;
       await this.recordFailure(
         user.id,
@@ -281,18 +284,6 @@ export class PasswordResetService {
     return (
       Boolean(user.email) &&
       !(user.inactivatedAt && user.inactivatedBy !== InactivationSource.SELF)
-    );
-  }
-
-  private hashCode(code: string) {
-    return createHmac('sha256', this.hmacKey).update(code).digest('hex');
-  }
-
-  private codeMatches(code: string, codeHash: string) {
-    const expected = Buffer.from(codeHash, 'hex');
-    const actual = Buffer.from(this.hashCode(code), 'hex');
-    return (
-      expected.length === actual.length && timingSafeEqual(expected, actual)
     );
   }
 

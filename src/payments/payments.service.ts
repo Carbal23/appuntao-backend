@@ -41,7 +41,7 @@ export class PaymentsService {
     private readonly auditService: AuditService,
   ) {}
 
-  /** Abono a una deuda. Cualquier rol del negocio. */
+  /** Abono a una deuda. Dueño, administrador o cajero. */
   async create(dto: CreatePaymentDto, userId: string, businessId: string) {
     const { debtId, amount, method, note } = dto;
 
