@@ -143,7 +143,7 @@ Todos requieren `Authorization: Bearer <token>`. Ninguno usa `x-business-id`: la
 | `GET` | `/api/business/:id/ownership-transfers/history` | Quien participó | Devuelve las **3 últimas** ya resueltas en las que el usuario fue dueño o destinatario, de la más reciente a la más antigua. Una pendiente vencida se devuelve como `EXPIRED` aunque la tarea diaria todavía no la haya marcado |
 | `DELETE` | `/api/business/:id/ownership-transfer` | Dueño | Cancela la transferencia vigente |
 | `GET` | `/api/business/ownership-transfers/incoming` | Cualquiera | Devuelve las transferencias que el usuario tiene por responder |
-| `POST` | `/api/business/ownership-transfers/:transferId/accept` | Destinatario | Acepta: pasa a ser dueño y el anterior queda como `ADMIN` |
+| `POST` | `/api/business/ownership-transfers/:transferId/accept` | Destinatario | Acepta: pasa a ser dueño y el anterior queda como `ADMIN`. Body: `acceptedLegalDocumentIds` (documentos para negocios), salvo que ya los haya aceptado |
 | `POST` | `/api/business/ownership-transfers/:transferId/reject` | Destinatario | Rechaza |
 
 ### Exportación (`business`)
@@ -190,7 +190,7 @@ Es una decisión: sirve para investigar accesos indebidos y para probar lo que p
 - Si el destinatario ya tiene 10 negocios activos como dueño, se responde 400 y la transferencia **sigue pendiente**: puede aceptarla después de cerrar uno ([business](business.md#reglas-de-negocio)).
 - Sacar a un miembro del equipo cancela las transferencias que tenía por responder.
 - **Cuando el miembro acepta o rechaza, el backend le envía un correo al dueño que la propuso** (`EmailProvider.sendOwnershipTransferResponse`, con Resend). Es un aviso: si el dueño no tiene correo o el envío falla, la respuesta queda guardada igual y el fallo solo se registra en el log. Las que vencen o se cancelan no envían correo; se ven en el historial.
-- El nuevo dueño tendrá pendiente el acuerdo de transmisión de datos para negocios (ver [legal](legal.md)), y la app se lo pide al aceptar.
+- **Quien recibe acepta los documentos para negocios**, como al crear un negocio: el body lleva `acceptedLegalDocumentIds` (la versión vigente de `BUSINESS_OWNERS`). Si ya los había aceptado, puede omitirlos. Sin ellos responde 400, y 503 si no hay documentos publicados. La aceptación se guarda en la misma transacción que el cambio de dueño (ver [legal](legal.md)). Antes solo lo pedía la app, después de aceptar.
 
 ### Exportar antes de cerrar
 
@@ -261,7 +261,7 @@ La app decide según `error`, nunca según el texto de `message`.
 | `auth-log` | Eventos `ACCOUNT_DEACTIVATED`, `ACCOUNT_REACTIVATED`, `ACCOUNT_DELETION_REQUESTED`, `ACCOUNT_DELETION_CANCELLED`, `ACCOUNT_ANONYMIZED` |
 | `audit` | Eventos de transferencia, `BUSINESS_DATA_EXPORTED` y `BUSINESS_PURGED` |
 | `providers/email` | Correo al dueño cuando el miembro acepta o rechaza la transferencia |
-| `legal` | Marca las aceptaciones como revocadas al anonimizar; el nuevo dueño acepta el acuerdo para negocios |
+| `legal` | Marca las aceptaciones como revocadas al anonimizar; `assertAcceptsCurrent` y `recordConsents` cuando el nuevo dueño acepta la transferencia |
 | `business-user` | Sacar a un miembro cancela sus transferencias pendientes |
 
 ## Decisiones y pendientes

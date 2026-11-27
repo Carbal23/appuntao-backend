@@ -87,7 +87,7 @@ Cada fila es la prueba de que un usuario aceptó una versión. Solo se agregan f
 | Valor | A quién se le exige | Cuándo |
 | --- | --- | --- |
 | `ALL_USERS` | Todo usuario | En el registro (`POST /api/users`) y, si sale una versión nueva, al entrar |
-| `BUSINESS_OWNERS` | Quien crea o tiene un negocio activo | Al crear un negocio (`POST /api/business`) y, si sale una versión nueva, al entrar |
+| `BUSINESS_OWNERS` | Quien crea, recibe o tiene un negocio activo | Al crear un negocio (`POST /api/business`), al aceptar una transferencia (`POST /api/business/ownership-transfers/:id/accept`) y, si sale una versión nueva, al entrar |
 
 ## Endpoints
 
@@ -120,6 +120,7 @@ Login y refresh devuelven además `pendingLegalDocuments` (`id`, `type`, `versio
 
 - **Registro** (`POST /api/users`): `acceptedLegalDocumentIds` debe traer la versión vigente de **todos** los obligatorios de `ALL_USERS`. Puede incluir opcionales de ese público; un id de otro público o de una versión vieja se rechaza.
 - **Creación de negocio** (`POST /api/business`): lo mismo con `BUSINESS_OWNERS`. Lo que el usuario ya había aceptado no hace falta reenviarlo, por ejemplo al crear su segundo negocio.
+- **Aceptar una transferencia** (`POST /api/business/ownership-transfers/:id/accept`): igual que crear un negocio, porque quien recibe pasa a ser Responsable de los datos de sus clientes.
 - En los dos casos, la entidad y sus aceptaciones se guardan en la misma transacción: no puede existir una cuenta o un negocio sin la prueba de la aceptación.
 - Un tipo obligatorio y activo **sin ninguna versión publicada** bloquea ese momento con 503. Un tipo inactivo no se exige.
 - Publicar una versión nueva de un obligatorio la deja pendiente para todos los que aceptaron la anterior.
@@ -223,7 +224,7 @@ No hace falta tocar la app: la app no tiene lista de tipos.
 | Con | Para qué |
 | --- | --- |
 | `users` | `assertAcceptsCurrent(ids, ALL_USERS)` y `recordConsents` al registrar |
-| `business` | `assertAcceptsCurrent(ids, BUSINESS_OWNERS, userId)` y `recordConsents` al crear un negocio |
+| `business` | `assertAcceptsCurrent(ids, BUSINESS_OWNERS, userId)` y `recordConsents` al crear un negocio y al aceptar una transferencia |
 | `auth` | `pendingLegalDocuments` en login y refresh |
 
 ## Errores

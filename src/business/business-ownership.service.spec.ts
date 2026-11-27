@@ -1,10 +1,15 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { BusinessUserRole, OwnershipTransferStatus } from '@prisma/client';
+import {
+  BusinessUserRole,
+  LegalAudience,
+  OwnershipTransferStatus,
+} from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AuditService } from 'src/audit/audit.service';
 import { AuthLogService } from 'src/auth-log/auth-log.service';
 import { EmailProvider } from 'src/providers/email.provider';
+import { LegalService } from 'src/legal/legal.service';
 import { BusinessOwnershipService } from './business-ownership.service';
 import { MAX_ACTIVE_OWNED_BUSINESSES } from './business-cap';
 
@@ -73,9 +78,21 @@ function createPrisma(activeOwned: number) {
   return { prisma, tx };
 }
 
-async function createService(activeOwned: number) {
+const LEGAL_IDS = ['6b1f3c2e-8a4d-4c9b-9e2f-1a2b3c4d5e6f'];
+
+/**
+ * @param legalError lo que lanza `assertAcceptsCurrent` cuando quien acepta
+ * no envió (ni había aceptado) la versión vigente de los documentos.
+ */
+async function createService(activeOwned: number, legalError?: Error) {
   const { prisma, tx } = createPrisma(activeOwned);
   const audit = { log: jest.fn() };
+  const legal = {
+    assertAcceptsCurrent: legalError
+      ? jest.fn().mockRejectedValue(legalError)
+      : jest.fn().mockResolvedValue(undefined),
+    recordConsents: jest.fn().mockResolvedValue(undefined),
+  };
 
   const moduleRef = await Test.createTestingModule({
     providers: [
@@ -84,6 +101,7 @@ async function createService(activeOwned: number) {
       { provide: AuditService, useValue: audit },
       { provide: EmailProvider, useValue: {} },
       { provide: AuthLogService, useValue: { record: jest.fn() } },
+      { provide: LegalService, useValue: legal },
     ],
   }).compile();
 
@@ -92,6 +110,7 @@ async function createService(activeOwned: number) {
     prisma,
     tx,
     audit,
+    legal,
   };
 }
 
@@ -143,6 +162,45 @@ describe('BusinessOwnershipService', () => {
       expect(
         prisma.businessOwnershipTransfer.updateMany,
       ).not.toHaveBeenCalled();
+    });
+
+    it('exige los documentos vigentes para negocios de quien recibe', async () => {
+      const { service, legal } = await createService(0);
+
+      await service.acceptTransfer(pendingTransfer.id, MEMBER_ID, LEGAL_IDS);
+
+      expect(legal.assertAcceptsCurrent).toHaveBeenCalledWith(
+        LEGAL_IDS,
+        LegalAudience.BUSINESS_OWNERS,
+        MEMBER_ID,
+      );
+    });
+
+    it('guarda la aceptación dentro de la transacción del cambio de dueño', async () => {
+      const { service, legal, tx } = await createService(0);
+
+      await service.acceptTransfer(pendingTransfer.id, MEMBER_ID, LEGAL_IDS);
+
+      expect(legal.recordConsents).toHaveBeenCalledWith(
+        tx,
+        MEMBER_ID,
+        LEGAL_IDS,
+        undefined,
+      );
+    });
+
+    it('sin aceptar los documentos no cambia el dueño', async () => {
+      const { service, prisma, tx } = await createService(
+        0,
+        new BadRequestException('Debes aceptar la versión vigente'),
+      );
+
+      await expect(
+        service.acceptTransfer(pendingTransfer.id, MEMBER_ID, []),
+      ).rejects.toThrow('Debes aceptar la versión vigente');
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(tx.business.update).not.toHaveBeenCalled();
     });
   });
 });
