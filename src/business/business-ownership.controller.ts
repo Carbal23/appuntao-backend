@@ -15,6 +15,7 @@ import { BusinessOwnershipService } from './business-ownership.service';
 import { ReqContext } from 'src/common/decorators/request-context.decorator';
 import type { RequestContext } from 'src/auth-log/auth-log.types';
 import {
+  AcceptOwnershipTransferDto,
   OwnershipTransferResponseDto,
   RequestOwnershipTransferDto,
 } from './dto/ownership-transfer.dto';
@@ -42,19 +43,32 @@ export class BusinessOwnershipController {
   @Post('ownership-transfers/:transferId/accept')
   @ApiOperation({
     summary: 'Aceptar una transferencia: el usuario pasa a ser el dueño',
-    description: 'El dueño anterior queda como ADMIN del negocio.',
+    description:
+      'El dueño anterior queda como ADMIN del negocio. Como al crear un negocio, quien recibe acepta los documentos vigentes para negocios (acceptedLegalDocumentIds), salvo que ya los haya aceptado.',
   })
   @ApiResponse({ status: 201, description: 'Transferencia aceptada' })
   @ApiResponse({
     status: 400,
-    description: 'Venció, el negocio ya no está activo o cambió de dueño',
+    description:
+      'Venció, el negocio ya no está activo o cambió de dueño, llegó al tope de negocios, o no aceptó la versión vigente de los documentos para negocios',
   })
   @ApiResponse({ status: 409, description: 'Ya fue respondida' })
+  @ApiResponse({
+    status: 503,
+    description: 'No hay documentos para negocios publicados',
+  })
   accept(
     @Param('transferId') transferId: string,
     @GetUser('id') userId: string,
+    @Body() dto: AcceptOwnershipTransferDto,
+    @ReqContext() context: RequestContext,
   ) {
-    return this.ownership.acceptTransfer(transferId, userId);
+    return this.ownership.acceptTransfer(
+      transferId,
+      userId,
+      dto.acceptedLegalDocumentIds ?? [],
+      context,
+    );
   }
 
   @Post('ownership-transfers/:transferId/reject')

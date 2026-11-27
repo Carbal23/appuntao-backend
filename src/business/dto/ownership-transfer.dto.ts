@@ -1,6 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { OwnershipTransferStatus } from '@prisma/client';
-import { IsNotEmpty, IsString, IsUUID } from 'class-validator';
+import {
+  IsArray,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 
 export class RequestOwnershipTransferDto {
   @ApiProperty({
@@ -13,6 +19,25 @@ export class RequestOwnershipTransferDto {
   @IsNotEmpty()
   @IsString()
   password!: string;
+}
+
+export class AcceptOwnershipTransferDto {
+  @ApiProperty({
+    type: [String],
+    required: false,
+    example: ['6b1f3c2e-8a4d-4c9b-9e2f-1a2b3c4d5e6f'],
+    description:
+      'Ids de los documentos vigentes para negocios que acepta quien recibe (GET /legal/current?audience=BUSINESS_OWNERS), como al crear un negocio. Puede omitirse si ya aceptó la versión vigente.',
+  })
+  @IsOptional()
+  @IsArray({
+    message: 'acceptedLegalDocumentIds debe ser una lista de ids de documentos',
+  })
+  @IsUUID('all', {
+    each: true,
+    message: 'Cada id de documento legal debe ser un UUID válido',
+  })
+  acceptedLegalDocumentIds?: string[];
 }
 
 class TransferPersonDto {

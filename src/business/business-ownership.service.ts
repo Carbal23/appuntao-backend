@@ -10,6 +10,7 @@ import {
   AuthLogEvent,
   BusinessOwnershipTransfer,
   BusinessUserRole,
+  LegalAudience,
   OwnershipTransferStatus,
   Prisma,
 } from '@prisma/client';
@@ -20,6 +21,7 @@ import { AuditAction } from 'src/audit/audit.types';
 import { EmailProvider } from 'src/providers/email.provider';
 import { AuthLogService } from 'src/auth-log/auth-log.service';
 import { AuthLogReason } from 'src/auth-log/auth-log.types';
+import { LegalService } from 'src/legal/legal.service';
 import type { RequestContext } from 'src/auth-log/auth-log.types';
 import {
   assertCanOwnAnotherBusiness,
@@ -63,6 +65,7 @@ export class BusinessOwnershipService {
     private readonly auditService: AuditService,
     private readonly emailProvider: EmailProvider,
     private readonly authLog: AuthLogService,
+    private readonly legalService: LegalService,
   ) {}
 
   /** El dueño propone pasarle el negocio a uno de sus miembros. */
@@ -242,9 +245,23 @@ export class BusinessOwnershipService {
    * El miembro acepta y pasa a ser el dueño; el dueño anterior queda como
    * ADMIN. Se acepta aunque el dueño anterior haya desactivado su cuenta o
    * pedido eliminarla: es justo el caso en que transfiere antes de irse.
+   *
+   * Ser dueño es ser Responsable de los datos de los clientes, así que, como
+   * al crear un negocio, quien recibe acepta antes los documentos para
+   * negocios. Lo que ya había aceptado no hace falta enviarlo de nuevo.
    */
-  async acceptTransfer(transferId: string, userId: string) {
+  async acceptTransfer(
+    transferId: string,
+    userId: string,
+    acceptedLegalDocumentIds: string[] = [],
+    context?: RequestContext,
+  ) {
     const transfer = await this.requireIncomingPending(transferId, userId);
+    await this.legalService.assertAcceptsCurrent(
+      acceptedLegalDocumentIds,
+      LegalAudience.BUSINESS_OWNERS,
+      userId,
+    );
 
     const outcome = await this.prisma.$transaction(async (tx) => {
       const business = await this.lockBusiness(tx, transfer.businessId);
@@ -284,6 +301,15 @@ export class BusinessOwnershipService {
       if (count === 0) {
         throw new ConflictException('La transferencia ya fue respondida');
       }
+
+      // En la misma transacción: si la transferencia no se aplica, tampoco
+      // queda la aceptación.
+      await this.legalService.recordConsents(
+        tx,
+        userId,
+        acceptedLegalDocumentIds,
+        context,
+      );
 
       await tx.business.update({
         where: { id: business.id },

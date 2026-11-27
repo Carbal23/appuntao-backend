@@ -143,7 +143,7 @@ Script contra una base desechable con todas las migraciones (44 casos, todos OK;
   - tres propuestas a la vez dejan una sola pendiente;
   - una contraseña incorrecta responde 400;
   - si el destinatario ya no es miembro, responde 400 y la propuesta queda cancelada;
-  - al aceptar, el nuevo dueño queda `OWNER` y el anterior `ADMIN`, y queda auditado.
+  - al aceptar, el nuevo dueño acepta los documentos para negocios (como al crear uno), queda `OWNER` y el anterior `ADMIN`, y queda auditado.
 - **Límite de contraseña** (9 casos):
   - 5 intentos fallidos repartidos entre desactivar, cambiar la contraseña y eliminar responden 400;
   - el 6.º responde 429 aunque la contraseña sea la correcta, y también frena cambiar la contraseña;
