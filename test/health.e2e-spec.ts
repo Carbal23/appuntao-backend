@@ -4,9 +4,10 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { HealthModule } from 'src/health/health.module';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { configureApp } from 'src/app.setup';
 
 /**
- * Prueba por HTTP, con el mismo prefijo `/api` que `main.ts`. La base se
+ * Prueba por HTTP, con la misma configuración que `main.ts` (`configureApp`). La base se
  * reemplaza: los e2e contra una base real necesitan una base de pruebas
  * propia (ver docs/pruebas.md).
  */
@@ -25,7 +26,7 @@ describe('Health (e2e)', () => {
       .compile();
 
     app = moduleRef.createNestApplication();
-    app.setGlobalPrefix('api');
+    configureApp(app);
     await app.init();
   });
 

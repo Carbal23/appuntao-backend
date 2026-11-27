@@ -212,6 +212,13 @@ Rama `feature/payments-review` desde `dev`:
 | 14 | `type` era obligatorio y no tenía valor por defecto | **Cambiado**: opcional, solo `PAYMENT` |
 | 15 | Anular en `debts` exigía cero pagos, así que una deuda con un abono ya reversado no se podía anular nunca | **Corregido en `debts`**: cuenta solo abonos y descuentos vigentes |
 
+### Pruebas automáticas
+
+Desde el 2026-11-26, lo que se verificó a mano quedó en pruebas que se corren con cada cambio (ver [pruebas](../pruebas.md)):
+
+- `src/payments/payments.service.spec.ts` (`npm test`): el recálculo del saldo y del estado, el orden bloqueo → lectura y el reparto del pago global.
+- `test/payments.db-spec.ts` (`npm run test:db`): 47 pruebas contra `appuntao_test`. Incluye abonos, pagos globales y reversos simultáneos, y una prueba por cada `FOR UPDATE`: otra transacción bloquea la deuda y la petición tiene que esperar. Al quitar cualquiera de los tres bloqueos falla su prueba.
+
 ### Qué se verificó
 
 Script por HTTP contra una base desechable con las 21 migraciones aplicadas. El código nuevo pasa los 55 casos, y la prueba de `debts` (48) sigue pasando. Contra `develop` (b6060c1) pasan 21: fallan los puntos 1, 5, 8, 9, 10 y la integridad de saldos (los `ADJUSTMENT` y `REVERSAL` a mano dejan saldos que no cuadran), y los endpoints nuevos no existen. Ahí no se midieron los abonos simultáneos (`develop` exige `type`) ni los recálculos de transacciones revertidas (no guardaba la causa).

@@ -17,7 +17,7 @@ Construido con **NestJS**, **Prisma ORM** y **PostgreSQL** (local o en Supabase)
 | **PostgreSQL** | Base de datos (local, o Supabase en development y production) |
 | **Passport + JWT + bcrypt** | Autenticación con access token y refresh token |
 | **Resend** | Envío de correos (invitaciones, recuperar la contraseña, avisos) |
-| **Jest** | Pruebas unitarias y de punta a punta ([docs/pruebas.md](docs/pruebas.md)) |
+| **Jest** | Pruebas unitarias, de punta a punta y con base real ([docs/pruebas.md](docs/pruebas.md)) |
 | **Swagger** | Documentación interactiva de la API (fuera de production) |
 
 Requisitos: **Node.js 22** y **PostgreSQL** para el entorno local.
@@ -59,6 +59,7 @@ npm run start:local
 | `npm run lint` / `npm run format` | ESLint y Prettier |
 | `npm test` | Pruebas unitarias ([docs/pruebas.md](docs/pruebas.md)) |
 | `npm run test:e2e` | Pruebas de punta a punta (HTTP) |
+| `npm run test:db` | Pruebas contra la base de pruebas `appuntao_test` (la crea si no existe) |
 | `npm run test:cov` | Pruebas unitarias con cobertura |
 
 El detalle de cada script de migración y cuándo usarlo está en [docs/base-de-datos.md](docs/base-de-datos.md).

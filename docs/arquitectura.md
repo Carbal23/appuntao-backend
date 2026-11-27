@@ -25,7 +25,7 @@ src/
 │   │                      nombres y contraseña; búsqueda de usuario por identificador
 │   └── utils/             extractBusinessId
 └── <modulo>/              un módulo por dominio (sus pruebas *.spec.ts van al lado)
-test/                      pruebas e2e (*.e2e-spec.ts) y su configuración
+test/                      pruebas e2e (*.e2e-spec.ts), con base real (*.db-spec.ts, test/db/) y su configuración
 scripts/                   scripts de operación (publicar documentos legales)
 ```
 
