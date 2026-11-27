@@ -10,7 +10,7 @@
 | [Entornos y configuración](entornos-y-configuracion.md) | Archivos `.env`, variables de entorno y para qué sirve cada una |
 | [Base de datos y migraciones](base-de-datos.md) | Modelos de Prisma, reglas y flujos de migración, qué hacer si algo sale mal |
 | [Despliegue](despliegue.md) | Cómo se despliega en Render y cómo se aplican las migraciones |
-| [Pruebas](pruebas.md) | Pruebas unitarias y e2e, convenciones, qué está probado y el plan por módulos |
+| [Pruebas](pruebas.md) | Pruebas unitarias, e2e y con base real (`appuntao_test`), convenciones, qué está probado y el plan por módulos |
 
 ## Módulos
 
