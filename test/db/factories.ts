@@ -66,6 +66,8 @@ export function createDebt(
     amount: number | string;
     createdAt?: Date;
     status?: DebtStatus;
+    dueDate?: Date | null;
+    description?: string | null;
   },
 ) {
   const amount = new Prisma.Decimal(data.amount);
@@ -78,6 +80,8 @@ export function createDebt(
       balance: amount,
       status: data.status ?? DebtStatus.OPEN,
       createdAt: data.createdAt,
+      dueDate: data.dueDate ?? null,
+      description: data.description ?? null,
     },
   });
 }

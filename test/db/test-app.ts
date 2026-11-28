@@ -74,5 +74,7 @@ export function asMember(
     get: (url: string) => auth(request(server).get(url)),
     post: (url: string, body: object = {}) =>
       auth(request(server).post(url)).send(body),
+    patch: (url: string, body: object = {}) =>
+      auth(request(server).patch(url)).send(body),
   };
 }
