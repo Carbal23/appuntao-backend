@@ -207,6 +207,13 @@ Rama `feature/debts-review` desde `dev`:
 | 15 | `GET /debtors/:id/debts` de un cliente ajeno o inactivo respondía 200 vacío | **Corregido**: 404, como el detalle |
 | 16 | `search` solo buscaba en la descripción | **Ampliado**: también el nombre del cliente |
 
+### Pruebas automáticas
+
+Desde el 2026-11-27 (ver [pruebas](../pruebas.md)):
+
+- `src/debts/debts.service.spec.ts` (`npm test`): el margen de un día en el vencimiento, la moneda del negocio, la revisión del negocio abierto dentro de la transacción, los filtros combinados y el orden bloqueo → lectura al anular.
+- `test/debts.db-spec.ts` (`npm run test:db`): 45 pruebas contra `appuntao_test`. Dos fuerzan los bloqueos. Una anula mientras un abono tiene la deuda bloqueada; la otra fía mientras se cierra el negocio (`FOR SHARE`). Al quitar cualquiera de los dos bloqueos, falla su prueba.
+
 ### Qué se verificó
 
 Script por HTTP contra una base desechable con las 19 migraciones aplicadas. El código nuevo pasa los 48 casos; los primeros 43 se corrieron también contra `develop` (896deac), que pasa 10. Varios fallos de `develop` en la parte de anular son en cadena (la deuda de prueba se creaba con una fecha solo con día, que respondía 500); el punto 7 se ve directo en la tabla de transiciones que se quitó.

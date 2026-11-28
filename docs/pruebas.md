@@ -107,7 +107,7 @@ it('baja el saldo y deja la deuda en PARTIAL', async () => {
 
 | Archivo | Qué tiene |
 | --- | --- |
-| `test/db/test-app.ts` | `createTestApp()` (la aplicación completa, con un token como el del login), `resetDatabase()` y `asMember()` |
+| `test/db/test-app.ts` | `createTestApp()` (la aplicación completa, con un token como el del login), `resetDatabase()` y `asMember()` (`get`, `post`, `patch`) |
 | `test/db/factories.ts` | `createUser`, `createBusiness`, `addMember`, `createDebtor`, `createDebt` y `debtState` (saldo como texto, `"70.00"`) |
 | `test/db/test-env.ts` | Las variables y las barreras de arriba |
 | `test/db/global-setup.ts` | Crea la base y aplica las migraciones |
@@ -138,8 +138,10 @@ Hay dos formas de probarlas, y hacen falta las dos:
 | `src/config/account.config.spec.ts` | La verificación del correo se exige siempre en production y es opcional en local y QA |
 | `src/email-verification/email-verification.service.spec.ts` | Pedir y verificar el código: límites, intentos, mismo error para todo, correo cambiado |
 | `src/invitations/invitations.service.spec.ts` | Aceptar desde `incoming` exige el código de la invitación |
+| `src/debts/debts.service.spec.ts` | Margen de un día en el vencimiento; moneda del negocio; negocio abierto dentro de la transacción; `overdue` y `status` con AND; bloquear antes de anular |
 | `src/payments/payments.service.spec.ts` | Recálculo del saldo y del estado; bloquear antes de leer; reparto del pago global; reverso: grupo, segunda mirada después del bloqueo, ids bloqueados en orden |
 | `test/health.e2e-spec.ts` | Las dos rutas de health por HTTP, con el prefijo `/api` |
+| `test/debts.db-spec.ts` | Debts contra la base: fiar (montos, vencimiento, cliente quitado, negocio cerrado, roles), listar y filtrar (vencidas, estado, búsqueda, orden, páginas sin repetir), anular (abonos o descuentos vigentes, reversados, estados no permitidos), anular y abonar a la vez, y bloqueos forzados (45 pruebas) |
 | `test/payments.db-spec.ts` | Payments completo contra la base: abono, descuento, pago global y reversos, con roles, validación, negocio ajeno (404), centavos, auditoría, peticiones simultáneas y bloqueos forzados (47 pruebas) |
 
 ## Plan por módulos
@@ -149,7 +151,7 @@ Se avanza un módulo a la vez, en este orden: primero lo que mueve plata, despu�
 | Orden | Módulo | Qué probar primero |
 | --- | --- | --- |
 | 1 | `payments` | **Hecho (2026-11-26).** Abono, descuento y pago global (reparto de la más antigua a la más nueva); no pasar del saldo; reversos (uno por movimiento, el grupo completo); recálculo del saldo y del estado |
-| 2 | `debts` | Fiar (monto, vencimiento, deudor inactivo, negocio cerrado); anular solo una deuda `OPEN` sin abonos vigentes; filtros `overdue` y `status` |
+| 2 | `debts` | **Hecho (2026-11-27).** Fiar (monto, vencimiento, deudor inactivo, negocio cerrado); anular solo una deuda `OPEN` sin abonos vigentes; filtros `overdue` y `status` |
 | 3 | `debtors` | Duplicados por teléfono o documento; quitar solo sin saldo; vincular y desvincular; saldo total y ranking |
 | 4 | `business-user` | Cambiar rol, sacar y salirse, con `team-rules` |
 | 5 | `business` | Crear con documentos legales, editar, cerrar con deudas, reabrir hasta la fecha de borrado |
